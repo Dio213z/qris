@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIREZ PAYMENT - Modern & Futuristic Payment</title>
+    <!-- Import Google Fonts Poppins -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Link to external CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <!-- Bagian Header -->
+        <header>
+            <h1 class="glow-text">DIREZ PAYMENT</h1>
+            <p class="subtitle">Sistem Pembayaran Cepat & Aman</p>
+        </header>
+
+        <!-- Bagian Card QRIS -->
+        <div class="qris-card">
+            <div class="qris-container">
+                <!-- Placeholder Image QRIS -->
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=DIREZ_PAYMENT" alt="QRIS DIREZ PAYMENT" id="qris-image">
+            </div>
+            <div class="qris-actions">
+                <button id="btn-zoom" class="btn-neon">ZOOM QRIS</button>
+                <a href="https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=DIREZ_PAYMENT" download="QRIS_DIREZ.png" class="btn-neon" id="btn-download">DOWNLOAD</a>
+            </div>
+        </div>
+
+        <!-- Bagian Metode Pembayaran -->
+        <div class="payment-methods">
+            <!-- Box DANA -->
+            <div class="payment-box" id="dana-box">
+                <div class="method-info">
+                    <h3>DANA</h3>
+                    <p>Nomor: <span id="dana-number">085646335331</span></p>
+                    <p>Nama: quiz d</p>
+                </div>
+                <button class="btn-copy" onclick="copyToClipboard('085646335331', 'DANA')">SALIN</button>
+            </div>
+
+            <!-- Box GOPAY -->
+            <div class="payment-box" id="gopay-box">
+                <div class="method-info">
+                    <h3>GOPAY</h3>
+                    <p>Nomor: <span id="gopay-number">085731439417</span></p>
+                    <p>Nama: MULYONO</p>
+                </div>
+                <button class="btn-copy" onclick="copyToClipboard('085731439417', 'GOPAY')">SALIN</button>
+            </div>
+        </div>
+
+        <!-- Bagian Konfirmasi Pembayaran -->
+        <div class="confirmation-section">
+            <p class="confirm-text">SUDAH MEMBAYAR? KLIK DI BAWAH UNTUK MENGKONFIRMASI PEMBAYARAN!</p>
+            <a href="https://wa.me/6285646335331?text=Halo%20admin,%20saya%20sudah%20melakukan%20pembayaran" class="btn-whatsapp">
+                HUBUNGI WHATSAPP
+            </a>
+        </div>
+    </div>
+
+    <!-- Modal untuk Zoom QRIS -->
+    <div id="qris-modal" class="modal">
+        <span class="close-modal">&times;</span>
+        <img class="modal-content" id="img-zoomed">
+    </div>
+
+    <!-- Link to external JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
