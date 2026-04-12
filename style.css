@@ -1,0 +1,247 @@
+/* style.css - Desain Modern & Futuristik untuk DIREZ PAYMENT */
+
+/* Reset Dasar */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+
+body {
+    background-color: #0a0b1e; /* Background gelap biru kehitaman */
+    color: #ffffff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+}
+
+/* Header Styling */
+header {
+    margin-bottom: 40px;
+}
+
+.glow-text {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #00d2ff;
+    text-shadow: 0 0 10px rgba(0, 210, 255, 0.7), 0 0 20px rgba(0, 210, 255, 0.5);
+    letter-spacing: 2px;
+}
+
+.subtitle {
+    font-size: 1rem;
+    color: #b0b0b0;
+    margin-top: -10px;
+}
+
+/* QRIS Card Styling */
+.qris-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 30px;
+    padding: 30px;
+    border: 1px solid rgba(0, 210, 255, 0.3);
+    box-shadow: 0 0 30px rgba(0, 210, 255, 0.15);
+    margin-bottom: 30px;
+    transition: transform 0.3s ease;
+}
+
+.qris-card:hover {
+    transform: translateY(-5px);
+}
+
+.qris-container {
+    background: #ffffff;
+    padding: 15px;
+    border-radius: 20px;
+    display: inline-block;
+    margin-bottom: 20px;
+}
+
+#qris-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    display: block;
+}
+
+.qris-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+/* Neon Button Styling */
+.btn-neon {
+    background: transparent;
+    border: 2px solid #00d2ff;
+    color: #00d2ff;
+    padding: 10px 25px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+}
+
+.btn-neon:hover {
+    background: #00d2ff;
+    color: #0a0b1e;
+    box-shadow: 0 0 20px #00d2ff;
+}
+
+/* Payment Methods Section */
+.payment-methods {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 40px;
+}
+
+.payment-box {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.payment-box:hover {
+    background: rgba(0, 210, 255, 0.05);
+    border-color: #00d2ff;
+}
+
+.method-info {
+    text-align: left;
+}
+
+.method-info h3 {
+    color: #00d2ff;
+    margin-bottom: 5px;
+}
+
+.method-info p {
+    font-size: 0.9rem;
+    color: #d1d1d1;
+}
+
+.btn-copy {
+    background: #00d2ff;
+    color: #0a0b1e;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+.btn-copy:hover {
+    background: #0099cc;
+    transform: scale(1.05);
+}
+
+/* Confirmation Section */
+.confirmation-section {
+    margin-top: 40px;
+}
+
+.confirm-text {
+    font-size: 0.85rem;
+    color: #b0b0b0;
+    margin-bottom: 15px;
+    font-weight: 300;
+}
+
+.btn-whatsapp {
+    display: block;
+    background: linear-gradient(45deg, #25D366, #128C7E);
+    color: #ffffff;
+    text-decoration: none;
+    padding: 18px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    box-shadow: 0 10px 20px rgba(37, 211, 102, 0.2);
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+}
+
+.btn-whatsapp:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 30px rgba(37, 211, 102, 0.4);
+}
+
+/* Modal Styling */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    padding-top: 100px;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.9);
+}
+
+.modal-content {
+    margin: auto;
+    display: block;
+    width: 80%;
+    max-width: 500px;
+    border-radius: 20px;
+    animation: zoom 0.3s;
+}
+
+@keyframes zoom {
+    from {transform: scale(0)}
+    to {transform: scale(1)}
+}
+
+.close-modal {
+    position: absolute;
+    top: 30px;
+    right: 35px;
+    color: #f1f1f1;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* Responsive Styling */
+@media (max-width: 480px) {
+    .glow-text {
+        font-size: 2.2rem;
+    }
+
+    .qris-actions {
+        flex-direction: column;
+    }
+
+    .payment-box {
+        flex-direction: column;
+        text-align: center;
+        gap: 15px;
+    }
+
+    .method-info {
+        text-align: center;
+    }
+}
