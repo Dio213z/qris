@@ -220,7 +220,7 @@ wss.on('connection', function (ws, req) {
       
    // Tambahkan handler untuk online/offline status
 if (data.type === 'chat_online' && username) {
-    let onlineUsers = loadOnlineChatUsers();
+    let onlineUsers = loadOnlineUsers();
     const existing = onlineUsers.findIndex(u => u.username === username);
     
     if (existing !== -1) {
@@ -233,7 +233,7 @@ if (data.type === 'chat_online' && username) {
         });
     }
     
-    saveOnlineChatUsers(onlineUsers);
+    saveOnlineUsers(onlineUsers);
     
     broadcastToChatClients({
         type: 'user_online',
@@ -243,9 +243,9 @@ if (data.type === 'chat_online' && username) {
 }
 
 if (data.type === 'chat_offline' && username) {
-    let onlineUsers = loadOnlineChatUsers();
+    let onlineUsers = loadOnlineUsers();
     onlineUsers = onlineUsers.filter(u => u.username !== username);
-    saveOnlineChatUsers(onlineUsers);
+    saveOnlineUsers(onlineUsers);
     
     broadcastToChatClients({
         type: 'user_offline',
@@ -257,9 +257,9 @@ if (data.type === 'chat_offline' && username) {
 if (data.type === 'chat_leave') {
     if (username) {
         chatClients.delete(username);
-        let onlineUsers = loadOnlineChatUsers();
+        let onlineUsers = loadOnlineUsers();
         onlineUsers = onlineUsers.filter(u => u.username !== username);
-        saveOnlineChatUsers(onlineUsers);
+        saveOnlineUsers(onlineUsers);
         broadcastToChatClients({ type: 'user_left', username, users: onlineUsers.length });
         console.log(`[CHAT] ${username} left`);
     }
@@ -353,6 +353,13 @@ if (data.type === 'chat_typing' && username) {
                 androidId: session.androidId,
                 role: session.role || "member"
               }));
+
+              // ✅ Trigger Heartbeat segera setelah sukses validasi
+              try {
+                startUserHeartbeat(validKey.username, data.androidId, data.key);
+              } catch(e) {
+                console.error('[HB] startUserHeartbeat error:', e.message);
+              }
       
                   const interval = setInterval(() => {
                   const session = JSON.parse(fs.readFileSync("keyList.json", "utf8"));
@@ -435,6 +442,25 @@ if (data.type === 'chat_typing' && username) {
           }));
 
         ws.send(JSON.stringify({ type: 'messages', with: withUser, messages }));
+      }
+
+      if (data.type === 'stats') {
+        const onlineUsers = loadOnlineUsers();
+        const activeConns = loadActiveConnections();
+        const now = Date.now();
+
+        const onlineNow = onlineUsers.filter(u => (now - new Date(u.lastActive).getTime()) < 60000);
+        const activeNow = activeConns.filter(c => (now - new Date(c.lastActive).getTime()) < 60000);
+
+        ws.send(JSON.stringify({
+          type: "stats",
+          onlineUsers: onlineNow.length,
+          activeConnections: activeNow.length
+        }));
+      }
+
+      if (data.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong' }));
       }
     } catch (e) {
       console.error("WS error:", e.message);
@@ -1194,6 +1220,13 @@ app.get("/myInfo", (req, res) => {
     androidId
   });
 
+  // ✅ Trigger Heartbeat segera setelah sukses validasi (Auto Login)
+  try {
+    startUserHeartbeat(username, androidId, key);
+  } catch(e) {
+    console.error('[HB] startUserHeartbeat error:', e.message);
+  }
+
   console.log("[✅ INFO] Info dikirim untuk:", username);
 
   return res.json({
@@ -1568,8 +1601,8 @@ app.get("/stats", (req, res) => {
         const activeConns = loadActiveConnections();
         const now = Date.now();
 
-        const onlineNow = onlineUsers.filter(u => (now - new Date(u.lastActive).getTime()) < 90000);
-        const activeNow  = activeConns.filter(c => (now - new Date(c.lastActive).getTime()) < 90000);
+        const onlineNow = onlineUsers.filter(u => (now - new Date(u.lastActive).getTime()) < 60000);
+        const activeNow  = activeConns.filter(c => (now - new Date(c.lastActive).getTime()) < 60000);
 
         return res.json({
             valid: true,
@@ -1769,7 +1802,7 @@ app.get("/chat/online-users", (req, res) => {
     const keyInfo = activeKeys[key];
     if (!keyInfo) return res.status(401).json({ valid: false });
     
-    const onlineUsers = loadOnlineChatUsers();
+    const onlineUsers = loadOnlineUsers();
     const activeNow = onlineUsers.filter(u => {
         const lastActive = new Date(u.lastActive);
         return (Date.now() - lastActive) < 60000;
@@ -1787,7 +1820,7 @@ app.post("/chat/online", (req, res) => {
     const keyInfo = activeKeys[key];
     if (!keyInfo) return res.status(401).json({ valid: false });
     
-    let onlineUsers = loadOnlineChatUsers();
+    let onlineUsers = loadOnlineUsers();
     const existing = onlineUsers.findIndex(u => u.username === username);
     
     if (existing !== -1) {
@@ -1800,7 +1833,7 @@ app.post("/chat/online", (req, res) => {
         });
     }
     
-    saveOnlineChatUsers(onlineUsers);
+    saveOnlineUsers(onlineUsers);
     
     broadcastToChatClients({
         type: 'user_online',
@@ -1816,9 +1849,9 @@ app.post("/chat/offline", (req, res) => {
     const keyInfo = activeKeys[key];
     if (!keyInfo) return res.status(401).json({ valid: false });
     
-    let onlineUsers = loadOnlineChatUsers();
+    let onlineUsers = loadOnlineUsers();
     onlineUsers = onlineUsers.filter(u => u.username !== username);
-    saveOnlineChatUsers(onlineUsers);
+    saveOnlineUsers(onlineUsers);
     
     broadcastToChatClients({
         type: 'user_offline',
@@ -3256,7 +3289,6 @@ function stopSessionHeartbeat(sessionName) {
 const ONLINE_USERS_FILE = './online_users.json';
 const ACTIVE_CONNECTIONS_FILE = './active_connections.json';
 const CHAT_ROOM_FILE = './chat_room.json';
-const ONLINE_CHAT_USERS_FILE = './online_chat_users.json';
 
 // Load online users
 function loadOnlineUsers() {
@@ -3293,17 +3325,6 @@ function loadChatMessages() {
 function saveChatMessages(messages) {
     const limited = messages.slice(-500);
     fs.writeFileSync(CHAT_ROOM_FILE, JSON.stringify(limited, null, 2));
-}
-
-function loadOnlineChatUsers() {
-    try {
-        if (!fs.existsSync(ONLINE_CHAT_USERS_FILE)) fs.writeFileSync(ONLINE_CHAT_USERS_FILE, JSON.stringify([]));
-        return JSON.parse(fs.readFileSync(ONLINE_CHAT_USERS_FILE, 'utf8'));
-    } catch(e) { return []; }
-}
-
-function saveOnlineChatUsers(users) {
-    fs.writeFileSync(ONLINE_CHAT_USERS_FILE, JSON.stringify(users, null, 2));
 }
 
 // ============ ROLE PERMISSIONS ============
@@ -4270,7 +4291,7 @@ app.get("/getOnlineUsers", (req, res) => {
     const keyInfo = activeKeys[key];
     if (!keyInfo) return res.json({ valid: false });
     
-    const onlineUsers = loadOnlineChatUsers();
+    const onlineUsers = loadOnlineUsers();
     const activeNow = onlineUsers.filter(u => {
         const lastActive = new Date(u.lastActive);
         return (Date.now() - lastActive) < 60000;
